@@ -1,10 +1,24 @@
-name: YouTube Shorts Daily
+name: YouTube Shorts Pipeline
 
 on:
-  workflow_dispatch:  # تشغيل يدوي فقط
+  workflow_dispatch:
+    inputs:
+      language:
+        description: "لغة الفيديو (ar/en)"
+        required: true
+        default: "ar"
+        type: choice
+        options:
+          - ar
+          - en
+      upload:
+        description: "رفع إلى YouTube بعد التوليد"
+        required: true
+        default: false
+        type: boolean
 
 jobs:
-  build-and-upload:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -27,6 +41,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Decode YouTube credentials
+        if: ${{ inputs.upload }}
         env:
           YT_CLIENT_SECRETS: ${{ secrets.YT_CLIENT_SECRETS }}
           YT_TOKEN: ${{ secrets.YT_TOKEN }}
@@ -34,14 +49,15 @@ jobs:
           python -c "import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.argv[1]))" "$YT_CLIENT_SECRETS" > client_secrets.json
           python -c "import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.argv[1]))" "$YT_TOKEN" > token.json
 
-      - name: Run YouTube Shorts Pipeline
+      - name: Run Pipeline
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          UPLOAD_TO_YOUTUBE: ${{ inputs.upload }}
         shell: bash
         run: |
           set +e
-          python -u src/main.py ar > /tmp/pipeline_stdout.log 2> /tmp/pipeline_stderr.log
+          python -u src/main.py ${{ inputs.language }} > /tmp/pipeline_stdout.log 2> /tmp/pipeline_stderr.log
           EXIT_CODE=$?
           echo "=== EXIT CODE: $EXIT_CODE ==="
           echo "=== STDOUT ==="
@@ -54,7 +70,15 @@ jobs:
           ls -la output/ 2>/dev/null || echo "No output"
           exit $EXIT_CODE
 
-      - name: Upload output log
+      - name: Upload video artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-video
+          path: output/final_videos/
+          retention-days: 7
+
+      - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:

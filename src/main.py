@@ -42,14 +42,21 @@ def run_one(language: str = None):
         create_video(sd, footage)
         print(f"  ✓ فيديو")
 
-        url = upload_video(sd)
-        print(f"  ✓ رفع: {url}")
-
-        log_event({
-            "ts": ts, "lang": lang, "topic": sd["topic"],
-            "youtube_url": url, "seconds": round(time.time() - start, 1),
-            "status": "ok",
-        })
+        if os.environ.get("UPLOAD_TO_YOUTUBE", "").lower() == "true":
+            url = upload_video(sd)
+            print(f"  ✓ رفع: {url}")
+            log_event({
+                "ts": ts, "lang": lang, "topic": sd["topic"],
+                "youtube_url": url, "seconds": round(time.time() - start, 1),
+                "status": "ok",
+            })
+        else:
+            log_event({
+                "ts": ts, "lang": lang, "topic": sd["topic"],
+                "video_file": sd.get("video_file"),
+                "seconds": round(time.time() - start, 1),
+                "status": "preview",
+            })
         return True
     except Exception as e:
         import traceback
