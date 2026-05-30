@@ -3,7 +3,7 @@ import random
 from datetime import datetime
 from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
-    TextClip, concatenate_videoclips, ColorClip, transfx
+    TextClip, concatenate_videoclips, ColorClip
 )
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
