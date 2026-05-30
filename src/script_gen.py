@@ -75,20 +75,33 @@ def generate_script(language: str) -> dict:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
     scene_prompt = (
-        "Read this story and suggest 7 English keywords for stock video search.\n"
-        "Each keyword should describe a visual scene matching the story.\n"
-        "Example: desert sunset, ancient city, ocean waves, mountain landscape\n"
+        "Extract 7 specific LITERAL visual scenes from this story.\n"
+        "Each scene must be a concrete keyword (2-4 words) that EXACTLY matches a moment in the story.\n"
+        "NO metaphors, NO abstract concepts. Only things you can SEE in a video.\n"
+        "Examples: Moses staff turning snake, fire burning wood, man walking through parted sea,\n"
+        "baby floating in river basket, man climbing mountain with sheep.\n"
         f"Story:\n{story}\n"
-        "7 comma-separated keywords only:"
+        "7 comma-separated keywords (each 2-4 specific words):"
     )
     keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]
+
+    cine_prompt = (
+        "For this story, list 6 cinematic search modifiers for premium video footage.\n"
+        "Example: volumetric light rays, golden hour desert, soft shadows mosque,\n"
+        "ancient architecture sunrise, dramatic sky sunset, candlelight interior\n"
+        f"Story:\n{story}\n"
+        "6 comma-separated cinematic modifiers only:"
+    )
+    cine_raw = _groq_complete(cine_prompt)
+    cine_keywords = [k.strip() for k in cine_raw.replace("\n", ",").split(",") if k.strip()]
 
     data = {
         "language": language,
         "topic": topic,
         "story": story,
-        "keywords": keywords[:5],
+        "keywords": keywords[:7],
+        "cine_keywords": cine_keywords[:6],
     }
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

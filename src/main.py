@@ -36,7 +36,7 @@ def run_one(language: str = None):
         generate_voiceover(sd)
         print(f"  ✓ صوت")
 
-        footage = download_footage(sd["keywords"])
+        footage = download_footage(sd)
         print(f"  ✓ {len(footage)} فيديوهات")
 
         create_video(sd, footage)

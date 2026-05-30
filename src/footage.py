@@ -8,14 +8,23 @@ from config import PEXELS_API_KEY
 FOOTAGE_DIR = "output/footage"
 os.makedirs(FOOTAGE_DIR, exist_ok=True)
 
+CINE_MODIFIERS = [
+    "cinematic lighting",
+    "volumetric light rays",
+    "golden hour",
+    "soft shadows",
+    "dramatic sky",
+    "ancient architecture",
+]
+
 def _search_pexels(query: str) -> list:
     results = []
     params = {
         "query": query,
-        "per_page": 5,
+        "per_page": 8,
         "orientation": "portrait",
         "size": "medium",
-        "min_duration": 5,
+        "min_duration": 4,
     }
     try:
         resp = requests.get(
@@ -55,37 +64,47 @@ def _search_pexels(query: str) -> list:
 
 def _download_video(item: dict) -> dict:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(FOOTAGE_DIR, f"ft_{ts}_{item['query']}_{item['id']}.mp4")
+    path = os.path.join(FOOTAGE_DIR, f"ft_{ts}_{item['query'][:20]}_{item['id']}.mp4")
     try:
         r = requests.get(item["link"], timeout=30)
         r.raise_for_status()
         with open(path, "wb") as f:
             f.write(r.content)
-        return {"path": path, "duration": item["duration"]}
+        return {"path": path, "duration": item["duration"], "keyword": item["query"]}
     except Exception:
         return None
 
-def download_footage(keywords: list, max_clips: int = 15) -> list:
-    if not keywords:
-        keywords = ["nature", "sky", "desert"]
+def download_footage(script_data: dict, max_clips: int = 15) -> list:
+    keywords = script_data.get("keywords", [])
+    cine_kw = script_data.get("cine_keywords", [])
 
-    # Search with each keyword and also with related Islamic terms
+    if not keywords:
+        keywords = ["desert landscape", "sky clouds", "ancient city"]
+
     search_queries = []
-    for kw in keywords[:5]:
-        search_queries.append(kw)
-        # Add combined queries for better relevance
-        search_queries.append(f"{kw} nature landscape")
+    # Literal scene matches (highest priority)
+    for kw in keywords:
+        search_queries.append(("literal", kw))
+        # Also search with an Islamic modifier for spiritual tone
+        search_queries.append(("literal", f"{kw} mosque"))
+    # Cinematic premium queries
+    modifier = cine_kw[0] if cine_kw else random.choice(CINE_MODIFIERS)
+    for kw in keywords[:4]:
+        search_queries.append(("cine", f"{kw} {modifier}"))
 
     all_candidates = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(_search_pexels, q): q for q in search_queries}
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {executor.submit(_search_pexels, q[1]): q for q in search_queries}
         for future in as_completed(futures):
             try:
-                all_candidates.extend(future.result())
+                results = future.result()
+                qtype, q = futures[future]
+                for r in results:
+                    r["qtype"] = qtype
+                all_candidates.extend(results)
             except Exception:
                 pass
 
-    # Deduplicate by video id
     seen = set()
     unique = []
     for c in all_candidates:
@@ -93,6 +112,7 @@ def download_footage(keywords: list, max_clips: int = 15) -> list:
             seen.add(c["id"])
             unique.append(c)
 
+    # Prioritize literal matches first, then cinematic
     random.shuffle(unique)
     target = unique[:max_clips]
 
