@@ -5,6 +5,7 @@ from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
     TextClip, concatenate_videoclips, ColorClip
 )
+from moviepy.video.fx import CrossFadeIn
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
 FINAL_DIR = "output/final_videos"
@@ -58,7 +59,8 @@ def create_video(script_data: dict, footage_clips: list) -> str:
         else:
             # Apply crossfade transitions between clips
             for i in range(1, len(parts)):
-                parts[i] = parts[i].with_start(parts[i - 1].end - TRANSITION_DURATION).crossfadein(TRANSITION_DURATION)
+                start = parts[i - 1].end - TRANSITION_DURATION
+                parts[i] = parts[i].with_start(start).with_effects([CrossFadeIn(TRANSITION_DURATION)])
             background = concatenate_videoclips(parts, method="compose")
 
     # Semi-transparent overlay gradient (darker at bottom for text)
@@ -99,7 +101,7 @@ def create_video(script_data: dict, footage_clips: list) -> str:
             )
         # Position text in the lower third area (above the bar)
         txt_y = VIDEO_HEIGHT * 0.62 + random.uniform(-10, 10)
-        txt = txt.with_position(("center", txt_y)).with_duration(seg_dur).with_start(idx * seg_dur).crossfadein(0.2)
+        txt = txt.with_position(("center", txt_y)).with_duration(seg_dur).with_start(idx * seg_dur).with_effects([CrossFadeIn(0.2)])
         texts.append(txt)
 
     # Title bar at top (subtle)
