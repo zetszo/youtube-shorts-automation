@@ -1,14 +1,7 @@
 name: YouTube Shorts Daily
 
 on:
-  push:
-    branches: [main]
-  schedule:
-    # 3 مرات يومياً: 8 صباحاً، 2 ظهراً، 8 مساءً (توقيت UTC)
-    - cron: '0 5 * * *'   # 8 صباحاً مصر/السعودية
-    - cron: '0 11 * * *'  # 2 ظهراً
-    - cron: '0 17 * * *'  # 8 مساءً
-  workflow_dispatch:  # تشغيل يدوي
+  workflow_dispatch:  # تشغيل يدوي فقط
 
 jobs:
   build-and-upload:
