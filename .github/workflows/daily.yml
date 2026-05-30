@@ -38,8 +38,8 @@ jobs:
           YT_CLIENT_SECRETS: ${{ secrets.YT_CLIENT_SECRETS }}
           YT_TOKEN: ${{ secrets.YT_TOKEN }}
         run: |
-          echo "$YT_CLIENT_SECRETS" | base64 -d > client_secrets.json
-          echo "$YT_TOKEN" | base64 -d > token.pickle
+          python -c "import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.argv[1]))" "$YT_CLIENT_SECRETS" > client_secrets.json
+          python -c "import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.argv[1]))" "$YT_TOKEN" > token.pickle
 
       - name: Run YouTube Shorts Pipeline
         env:
