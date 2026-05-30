@@ -1,6 +1,8 @@
 name: YouTube Shorts Daily
 
 on:
+  push:
+    branches: [main]
   schedule:
     # 3 مرات يومياً: 8 صباحاً، 2 ظهراً، 8 مساءً (توقيت UTC)
     - cron: '0 5 * * *'   # 8 صباحاً مصر/السعودية
