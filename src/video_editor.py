@@ -18,6 +18,13 @@ FONT_PATHS = [
 ]
 FONT_FALLBACK = "DejaVu-Sans"
 
+SAFE_Y = 0.42
+TEXT_WIDTH = VIDEO_WIDTH - 300
+FONT_SIZE = 70
+STROKE_WIDTH = 3
+BG_PAD = 25
+BG_OPACITY = 0.55
+
 def _find_font():
     for p in FONT_PATHS:
         if os.path.exists(p):
@@ -64,40 +71,54 @@ def create_video(script_data: dict, footage_clips: list) -> str:
 
         background = concatenate_videoclips(parts, method="compose")
 
-    overlay = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(target).with_opacity(0.2)
-
     segments = _split_into_segments(story, target)
     font = _find_font()
 
-    texts = []
+    layers = []
     for text, start, dur in segments:
         try:
             txt = TextClip(
                 text=text,
                 font=font,
-                font_size=66,
+                font_size=FONT_SIZE,
                 color="white",
                 stroke_color="black",
-                stroke_width=1,
+                stroke_width=STROKE_WIDTH,
                 method="caption",
-                size=(VIDEO_WIDTH - 160, None),
+                size=(TEXT_WIDTH, None),
                 text_align="center",
             )
         except Exception:
             txt = TextClip(
                 text=text,
                 font=FONT_FALLBACK,
-                font_size=58,
+                font_size=FONT_SIZE - 8,
                 color="white",
                 stroke_color="black",
-                stroke_width=1,
+                stroke_width=STROKE_WIDTH,
                 method="label",
             )
-        txt = txt.with_position(("center", "center")).with_duration(dur).with_start(start)
-        texts.append(txt)
+
+        try:
+            tw, th = txt.size
+        except Exception:
+            tw, th = TEXT_WIDTH, int(FONT_SIZE * 2.5)
+
+        bg_w = tw + BG_PAD * 2
+        bg_h = th + BG_PAD * 2
+
+        txt_bg = (ColorClip(size=(int(bg_w), int(bg_h)), color=(0, 0, 0))
+                  .with_opacity(BG_OPACITY))
+        txt_layer = txt.with_position(("center", "center"))
+
+        segment = (CompositeVideoClip([txt_bg, txt_layer])
+                   .with_position(("center", int(SAFE_Y * VIDEO_HEIGHT - bg_h / 2)))
+                   .with_duration(dur)
+                   .with_start(start))
+        layers.append(segment)
 
     final = CompositeVideoClip(
-        [background, overlay] + texts,
+        [background] + layers,
         size=(VIDEO_WIDTH, VIDEO_HEIGHT)
     )
     final = final.with_audio(audio).with_duration(target)
