@@ -1,4 +1,4 @@
-import os, pickle, json, requests, base64, sys
+import os, json, requests, base64, sys
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
@@ -52,11 +52,12 @@ creds = Credentials(
     scopes=SCOPES,
 )
 
-with open("token.pickle", "wb") as f:
-    pickle.dump(creds, f)
+token_json = creds.to_json()
 
-with open("token.pickle", "rb") as f:
-    b64 = base64.b64encode(f.read()).decode()
+with open("token.json", "w", encoding="utf-8") as f:
+    f.write(token_json)
+
+b64 = base64.b64encode(token_json.encode()).decode()
 
 print()
 print("انسخ الرمز التالي وأضفه كـ GitHub Secret باسم YT_TOKEN:")

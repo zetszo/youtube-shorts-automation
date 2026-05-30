@@ -1,5 +1,6 @@
-import pickle
+import json
 import os
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -11,8 +12,8 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 def _get_service():
     creds = None
     if os.path.exists(YOUTUBE_TOKEN_FILE):
-        with open(YOUTUBE_TOKEN_FILE, "rb") as f:
-            creds = pickle.load(f)
+        with open(YOUTUBE_TOKEN_FILE, encoding="utf-8") as f:
+            creds = Credentials.from_authorized_user_info(json.load(f))
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -20,8 +21,8 @@ def _get_service():
         else:
             flow = InstalledAppFlow.from_client_secrets_file(YOUTUBE_CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0, open_browser=False)
-        with open(YOUTUBE_TOKEN_FILE, "wb") as f:
-            pickle.dump(creds, f)
+        with open(YOUTUBE_TOKEN_FILE, "w", encoding="utf-8") as f:
+            f.write(creds.to_json())
 
     return build("youtube", "v3", credentials=creds)
 

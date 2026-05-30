@@ -10,7 +10,7 @@ PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "YOUR_PEXELS_API_KEY")
 
 # YouTube API
 YOUTUBE_CREDENTIALS_FILE = "client_secrets.json"
-YOUTUBE_TOKEN_FILE = "token.pickle"
+YOUTUBE_TOKEN_FILE = "token.json"
 
 # إعدادات الفيديو
 VIDEO_WIDTH = 1080
