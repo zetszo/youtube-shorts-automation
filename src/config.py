@@ -18,7 +18,7 @@ VIDEO_HEIGHT = 1920
 VIDEO_DURATION = 50
 
 # إعدادات الصوت
-TTS_VOICE_ARABIC = "ar-SA-HudaNeural"
+TTS_VOICE_ARABIC = "ar-SA-ZariyahNeural"
 TTS_VOICE_ENGLISH = "en-US-JennyNeural"
 
 # عدد الفيديوهات اليومية
