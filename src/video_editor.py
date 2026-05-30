@@ -1,4 +1,5 @@
 import os
+import re
 import random
 from datetime import datetime
 from moviepy import (
@@ -53,45 +54,40 @@ def create_video(script_data: dict, footage_clips: list) -> str:
 
         background = concatenate_videoclips(parts, method="compose")
 
-    overlay = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(target).with_opacity(0.15)
+    overlay = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(target).with_opacity(0.2)
 
-    bar = ColorClip(size=(VIDEO_WIDTH, 600), color=(0, 0, 0)).with_duration(target).with_opacity(0.6)
-    bar = bar.with_position(("center", VIDEO_HEIGHT - 600))
-
-    lines = _split_text(story, target)
-    seg_dur = target / max(len(lines), 1)
+    segments = _split_into_segments(story, target)
     font = FONT_PATH if os.path.exists(FONT_PATH) else FONT_FALLBACK
 
     texts = []
-    for idx, line in enumerate(lines):
+    for text, start, dur in segments:
         try:
             txt = TextClip(
-                text=line,
+                text=text,
                 font=font,
-                font_size=70,
+                font_size=66,
                 color="white",
                 stroke_color="black",
                 stroke_width=1,
                 method="caption",
-                size=(VIDEO_WIDTH - 120, None),
+                size=(VIDEO_WIDTH - 160, None),
                 text_align="center",
             )
         except Exception:
             txt = TextClip(
-                text=line,
+                text=text,
                 font=FONT_FALLBACK,
-                font_size=62,
+                font_size=58,
                 color="white",
                 stroke_color="black",
                 stroke_width=1,
                 method="label",
             )
-        txt_y = VIDEO_HEIGHT - 350
-        txt = txt.with_position(("center", txt_y)).with_duration(seg_dur).with_start(idx * seg_dur)
+        txt = txt.with_position(("center", "center")).with_duration(dur).with_start(start)
         texts.append(txt)
 
     final = CompositeVideoClip(
-        [background, overlay, bar] + texts,
+        [background, overlay] + texts,
         size=(VIDEO_WIDTH, VIDEO_HEIGHT)
     )
     final = final.with_audio(audio).with_duration(target)
@@ -105,29 +101,33 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     script_data["video_file"] = out
     return out
 
-def _split_text(text: str, total: float, chars: int = 90) -> list:
-    words = text.split()
-    lines, cur, cur_len = [], [], 0
-    for w in words:
-        if cur_len + len(w) + 1 > chars and cur:
-            lines.append(" ".join(cur))
-            cur, cur_len = [w], len(w)
-        else:
-            cur.append(w)
-            cur_len += len(w) + 1
-    if cur:
-        lines.append(" ".join(cur))
-    mins = max(int(total / 3), 2)
-    while len(lines) < mins:
-        new = []
-        for l in lines:
-            if len(l) > chars // 2:
-                mid = len(l) // 2
-                sp = l.rfind(" ", 0, mid)
-                new.extend([l[:sp], l[sp + 1:]] if sp > 0 else [l])
-            else:
-                new.append(l)
-        if len(new) == len(lines):
-            break
-        lines = new
-    return lines
+def _split_into_segments(text: str, total_duration: float) -> list:
+    sentences = re.split(r'(?<=[.!?؟!])', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+
+    if len(sentences) < 3:
+        words = text.split()
+        chunk = max(1, len(words) // 3)
+        sentences = []
+        for i in range(0, len(words), chunk):
+            sentences.append(" ".join(words[i:i + chunk]))
+
+    total_words = sum(len(s.split()) for s in sentences)
+    if total_words == 0:
+        return [(text, 0, total_duration)]
+
+    result = []
+    current = 0
+    for s in sentences:
+        wc = len(s.split())
+        dur = max(1.5, (wc / total_words) * total_duration)
+        if current + dur > total_duration:
+            dur = total_duration - current
+        if dur > 0.5:
+            result.append((s, current, dur))
+            current += dur
+
+    if not result:
+        result = [(text, 0, total_duration)]
+
+    return result
