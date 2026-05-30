@@ -2,14 +2,14 @@ import json
 import os
 import requests
 from datetime import datetime
-from config import GROQ_API_KEY, GROQ_MODEL, TOPICS_ARABIC, TOPICS_ENGLISH
+from config import GROQ_API_KEY, GROQ_MODEL_AR, GROQ_MODEL_EN, TOPICS_ARABIC, TOPICS_ENGLISH
 
 HISTORY_FILE = "output/history.json"
 SCRIPTS_DIR = "output/scripts"
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 
-def _groq_complete(prompt: str) -> str:
+def _groq_complete(prompt: str, model: str = None) -> str:
     resp = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={
@@ -17,7 +17,7 @@ def _groq_complete(prompt: str) -> str:
             "Content-Type": "application/json",
         },
         json={
-            "model": GROQ_MODEL,
+            "model": model or GROQ_MODEL_EN,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "max_tokens": 1024,
@@ -67,18 +67,19 @@ def generate_script(language: str) -> dict:
             "Write only the story without a title."
         )
 
-    story = _groq_complete(prompt)
+    model = GROQ_MODEL_AR if language == "ar" else GROQ_MODEL_EN
+    story = _groq_complete(prompt, model)
     story = _clean_text(story)
 
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
     scene_prompt = (
-        "اقرأ هذه القصة واقترح 7 كلمات انجليزية للبحث في مخزون الفيديو.\n"
-        "الكلمات يجب أن تصف مشاهد مرئية مناسبة للقصة.\n"
-        "مثال: desert sunset, ancient city, ocean waves, mountain landscape\n"
-        f"القصة:\n{story}\n"
-        "7 كلمات فقط مفصولة بفواصل:"
+        "Read this story and suggest 7 English keywords for stock video search.\n"
+        "Each keyword should describe a visual scene matching the story.\n"
+        "Example: desert sunset, ancient city, ocean waves, mountain landscape\n"
+        f"Story:\n{story}\n"
+        "7 comma-separated keywords only:"
     )
     keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]

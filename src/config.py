@@ -3,7 +3,8 @@ import os
 # Groq API (مجاني - Llama 3 70B)
 # سجل في https://console.groq.com/ واحصل على API Key
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "YOUR_GROQ_API_KEY")
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL_AR = "allam-2-7b"
+GROQ_MODEL_EN = "llama-3.3-70b-versatile"
 
 # Pexels (مجاني - https://www.pexels.com/api/)
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "YOUR_PEXELS_API_KEY")
