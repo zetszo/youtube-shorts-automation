@@ -46,10 +46,13 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-          set +e
-          python src/main.py ar
+          python -u src/main.py ar > /tmp/pipeline_stdout.log 2> /tmp/pipeline_stderr.log
           EXIT_CODE=$?
           echo "=== EXIT CODE: $EXIT_CODE ==="
+          echo "=== STDOUT ==="
+          cat /tmp/pipeline_stdout.log 2>/dev/null
+          echo "=== STDERR ==="
+          cat /tmp/pipeline_stderr.log 2>/dev/null
           echo "=== LOG FILE ==="
           cat output/log.json 2>/dev/null || echo "No log file"
           echo "=== OUTPUT DIR ==="
@@ -61,4 +64,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: output-logs
-          path: output/log.json
+          path: |
+            output/log.json
+            /tmp/pipeline_stdout.log
+            /tmp/pipeline_stderr.log
