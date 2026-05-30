@@ -45,7 +45,9 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        shell: bash
         run: |
+          set +e
           python -u src/main.py ar > /tmp/pipeline_stdout.log 2> /tmp/pipeline_stderr.log
           EXIT_CODE=$?
           echo "=== EXIT CODE: $EXIT_CODE ==="
