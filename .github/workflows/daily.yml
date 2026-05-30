@@ -1,0 +1,53 @@
+name: YouTube Shorts Daily
+
+on:
+  schedule:
+    # 3 مرات يومياً: 8 صباحاً، 2 ظهراً، 8 مساءً (توقيت UTC)
+    - cron: '0 5 * * *'   # 8 صباحاً مصر/السعودية
+    - cron: '0 11 * * *'  # 2 ظهراً
+    - cron: '0 17 * * *'  # 8 مساءً
+  workflow_dispatch:  # تشغيل يدوي
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Arabic fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto fonts-noto-cjk fonts-noto-color-emoji
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Decode YouTube credentials
+        env:
+          YT_CLIENT_SECRETS: ${{ secrets.YT_CLIENT_SECRETS }}
+          YT_TOKEN: ${{ secrets.YT_TOKEN }}
+        run: |
+          echo "$YT_CLIENT_SECRETS" | base64 -d > client_secrets.json
+          echo "$YT_TOKEN" | base64 -d > token.pickle
+
+      - name: Run YouTube Shorts Pipeline
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: python src/main.py daily
+
+      - name: Upload output log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: output-logs
+          path: output/log.json
