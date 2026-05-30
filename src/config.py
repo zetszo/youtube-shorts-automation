@@ -18,9 +18,9 @@ VIDEO_HEIGHT = 1920
 VIDEO_DURATION = 50
 
 # إعدادات الصوت
-TTS_VOICE_ARABIC = "ar-SA-HamedNeural"
+TTS_VOICE_ARABIC = "ar-EG-ShakirNeural"
 TTS_VOICE_ENGLISH = "en-US-JennyNeural"
-TTS_RATE = "-15%"  # أبطأ للوضوح
+TTS_RATE = "+0%"
 
 # عدد الفيديوهات اليومية
 VIDEOS_PER_DAY = 3

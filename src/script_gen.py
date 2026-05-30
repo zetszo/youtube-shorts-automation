@@ -74,11 +74,11 @@ def generate_script(language: str) -> dict:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
     scene_prompt = (
-        "اقرأ هذه القصة واقترح 5 مشاهد مصورة مناسبة لكل جزء من القصة.\n"
-        "كل مشهد: كلمة واحدة بالانجليزية تصف الصورة المناسبة.\n"
-        "مثال: desert, mosque, sky, ocean, mountain\n"
+        "اقرأ هذه القصة واقترح 7 كلمات انجليزية للبحث في مخزون الفيديو.\n"
+        "الكلمات يجب أن تصف مشاهد مرئية مناسبة للقصة.\n"
+        "مثال: desert sunset, ancient city, ocean waves, mountain landscape\n"
         f"القصة:\n{story}\n"
-        "5 كلمات فقط مفصولة بفواصل:"
+        "7 كلمات فقط مفصولة بفواصل:"
     )
     keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]

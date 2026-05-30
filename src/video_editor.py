@@ -5,7 +5,6 @@ from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
     TextClip, concatenate_videoclips, ColorClip
 )
-from moviepy.video.fx import CrossFadeIn
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
 FINAL_DIR = "output/final_videos"
@@ -13,7 +12,6 @@ os.makedirs(FINAL_DIR, exist_ok=True)
 
 FONT_PATH = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"
 FONT_FALLBACK = "DejaVu-Sans"
-TRANSITION_DURATION = 0.5  # crossfade duration
 
 def create_video(script_data: dict, footage_clips: list) -> str:
     story = script_data["story"]
@@ -23,7 +21,6 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     audio = AudioFileClip(audio_path)
     target = audio.duration
 
-    # Load footage
     bg = []
     for c in footage_clips:
         try:
@@ -32,7 +29,6 @@ def create_video(script_data: dict, footage_clips: list) -> str:
         except Exception:
             pass
 
-    # Build segments with crossfade transitions
     if not bg:
         bg = [ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)]
         background = bg[0]
@@ -44,33 +40,24 @@ def create_video(script_data: dict, footage_clips: list) -> str:
         while remaining > 0.5 and bg:
             clip = bg[i % len(bg)]
             dur = min(clip.duration, remaining)
-            sub = clip.subclipped(0, dur)
+            sub = clip.subclipped(0, dur).resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
             if sub.duration < 1.0:
                 i += 1
                 continue
-            sub = sub.resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
             parts.append(sub)
             remaining -= dur
             i += 1
 
         if not parts:
             parts = [ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)]
-            background = parts[0]
-        else:
-            # Apply crossfade transitions between clips
-            for i in range(1, len(parts)):
-                start = parts[i - 1].end - TRANSITION_DURATION
-                parts[i] = parts[i].with_start(start).with_effects([CrossFadeIn(TRANSITION_DURATION)])
-            background = concatenate_videoclips(parts, method="compose")
 
-    # Semi-transparent overlay gradient (darker at bottom for text)
-    overlay = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(target).with_opacity(0.25)
+        background = concatenate_videoclips(parts, method="compose")
 
-    # Bottom gradient bar for text area
-    bar = ColorClip(size=(VIDEO_WIDTH, 500), color=(0, 0, 0)).with_duration(target).with_opacity(0.55)
-    bar = bar.with_position(("center", VIDEO_HEIGHT - 500))
+    overlay = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(target).with_opacity(0.15)
 
-    # Text lines
+    bar = ColorClip(size=(VIDEO_WIDTH, 600), color=(0, 0, 0)).with_duration(target).with_opacity(0.6)
+    bar = bar.with_position(("center", VIDEO_HEIGHT - 600))
+
     lines = _split_text(story, target)
     seg_dur = target / max(len(lines), 1)
     font = FONT_PATH if os.path.exists(FONT_PATH) else FONT_FALLBACK
@@ -81,35 +68,30 @@ def create_video(script_data: dict, footage_clips: list) -> str:
             txt = TextClip(
                 text=line,
                 font=font,
-                font_size=52,
+                font_size=70,
                 color="white",
                 stroke_color="black",
                 stroke_width=1,
                 method="caption",
-                size=(VIDEO_WIDTH - 160, None),
+                size=(VIDEO_WIDTH - 120, None),
                 text_align="center",
             )
         except Exception:
             txt = TextClip(
                 text=line,
                 font=FONT_FALLBACK,
-                font_size=48,
+                font_size=62,
                 color="white",
                 stroke_color="black",
                 stroke_width=1,
                 method="label",
             )
-        # Position text in the lower third area (above the bar)
-        txt_y = VIDEO_HEIGHT * 0.62 + random.uniform(-10, 10)
-        txt = txt.with_position(("center", txt_y)).with_duration(seg_dur).with_start(idx * seg_dur).with_effects([CrossFadeIn(0.2)])
+        txt_y = VIDEO_HEIGHT - 350
+        txt = txt.with_position(("center", txt_y)).with_duration(seg_dur).with_start(idx * seg_dur)
         texts.append(txt)
 
-    # Title bar at top (subtle)
-    title_bar = ColorClip(size=(VIDEO_WIDTH, 80), color=(0, 0, 0)).with_duration(target).with_opacity(0.3)
-    title_bar = title_bar.with_position(("center", 0))
-
     final = CompositeVideoClip(
-        [background, overlay, bar, title_bar] + texts,
+        [background, overlay, bar] + texts,
         size=(VIDEO_WIDTH, VIDEO_HEIGHT)
     )
     final = final.with_audio(audio).with_duration(target)
@@ -123,7 +105,7 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     script_data["video_file"] = out
     return out
 
-def _split_text(text: str, total: float, chars: int = 70) -> list:
+def _split_text(text: str, total: float, chars: int = 90) -> list:
     words = text.split()
     lines, cur, cur_len = [], [], 0
     for w in words:
@@ -135,7 +117,7 @@ def _split_text(text: str, total: float, chars: int = 70) -> list:
             cur_len += len(w) + 1
     if cur:
         lines.append(" ".join(cur))
-    mins = max(int(total / 3.2), 3)
+    mins = max(int(total / 3), 2)
     while len(lines) < mins:
         new = []
         for l in lines:
