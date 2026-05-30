@@ -65,12 +65,7 @@ def daily() -> bool:
     for i in range(VIDEOS_PER_DAY):
         lang = "ar" if i % 2 == 0 else "en"
         print(f"\n--- {i+1}/{VIDEOS_PER_DAY} ({lang}) ---")
-        if not run_one(lang):
-            ok = False
-        if i < VIDEOS_PER_DAY - 1:
-            wait = random.randint(120, 300)
-            print(f"⏳ {wait//60} د...")
-            time.sleep(wait)
+        ok = run_one(lang)
     return ok
 
 if __name__ == "__main__":

@@ -46,9 +46,15 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-          python src/main.py daily 2>&1
+          set +e
+          python src/main.py ar
+          EXIT_CODE=$?
+          echo "=== EXIT CODE: $EXIT_CODE ==="
           echo "=== LOG FILE ==="
           cat output/log.json 2>/dev/null || echo "No log file"
+          echo "=== OUTPUT DIR ==="
+          ls -la output/ 2>/dev/null || echo "No output"
+          exit $EXIT_CODE
 
       - name: Upload output log
         if: always()
