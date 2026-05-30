@@ -11,8 +11,18 @@ from config import VIDEO_WIDTH, VIDEO_HEIGHT
 FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
 
-FONT_PATH = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"
+FONT_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+]
 FONT_FALLBACK = "DejaVu-Sans"
+
+def _find_font():
+    for p in FONT_PATHS:
+        if os.path.exists(p):
+            return p
+    return FONT_FALLBACK
 
 def create_video(script_data: dict, footage_clips: list) -> str:
     story = script_data["story"]
@@ -57,7 +67,7 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     overlay = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(target).with_opacity(0.2)
 
     segments = _split_into_segments(story, target)
-    font = FONT_PATH if os.path.exists(FONT_PATH) else FONT_FALLBACK
+    font = _find_font()
 
     texts = []
     for text, start, dur in segments:

@@ -26,18 +26,28 @@ TTS_RATE = "+0%"
 # عدد الفيديوهات اليومية
 VIDEOS_PER_DAY = 3
 
-# مواضيع القصص - أنبياء فقط
+# مواضيع القصص - أنبياء وصحابة
 TOPICS_ARABIC = [
     "قصة سيدنا آدم عليه السلام وابنه هابيل",
     "قصة سيدنا نوح عليه السلام والطوفان",
     "قصة سيدنا إبراهيم عليه السلام والنار",
     "قصة سيدنا موسى عليه السلام وفرعون",
     "قصة سيدنا يوسف عليه السلام وإخوته",
-    "قصة سيدنا سليمان عليه السلام والنمل",
     "قصة سيدنا محمد صلى الله عليه وسلم والإسراء",
     "قصة سيدنا عيسى عليه السلام والمائدة",
     "قصة سيدنا يونس عليه السلام والحوت",
     "قصة سيدنا أيوب عليه السلام والصبر",
+    "قصة عمر بن الخطاب رضي الله عنه وإسلامه",
+    "قصة بلال بن رباح رضي الله عنه والأذان",
+    "قصة خالد بن الوليد رضي الله عنه والحروب",
+    "قصة عثمان بن عفان رضي الله عنه والقرآن",
+    "قصة علي بن أبي طالب رضي الله عنه والشجاعة",
+    "قصة الصديق أبو بكر رضي الله عنه والهجرة",
+    "قصة سعد بن أبي وقاص رضي الله عنه",
+    "قصة حمزة بن عبد المطلب رضي الله عنه",
+    "قصة مصعب بن عمير رضي الله عنه أول سفير",
+    "قصة زيد بن ثابت رضي الله عنه وجمع القرآن",
+    "قصة أبو هريرة رضي الله عنه وحفظ الحديث",
 ]
 
 TOPICS_ENGLISH = [
@@ -46,9 +56,19 @@ TOPICS_ENGLISH = [
     "Story of Prophet Abraham and the fire",
     "Story of Prophet Moses and Pharaoh",
     "Story of Prophet Joseph and his brothers",
-    "Story of Prophet Solomon and the ants",
     "Story of Prophet Muhammad and the night journey",
     "Story of Prophet Jesus and the table spread",
     "Story of Prophet Jonah and the whale",
     "Story of Prophet Job and patience",
+    "Story of Omar ibn Khattab and his conversion to Islam",
+    "Story of Bilal ibn Rabah and the first Adhan",
+    "Story of Khalid ibn Walid and the battles",
+    "Story of Uthman ibn Affan and the Quran compilation",
+    "Story of Ali ibn Abi Talib and his bravery",
+    "Story of Abu Bakr al-Siddiq and the Hijra",
+    "Story of Saad ibn Abi Waqqas",
+    "Story of Hamza ibn Abdul Muttalib",
+    "Story of Musab ibn Umair the first ambassador",
+    "Story of Zaid ibn Thabit and the Quran compilation",
+    "Story of Abu Hurairah and hadith preservation",
 ]
