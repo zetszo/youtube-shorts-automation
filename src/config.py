@@ -18,28 +18,36 @@ VIDEO_HEIGHT = 1920
 VIDEO_DURATION = 50
 
 # إعدادات الصوت
-TTS_VOICE_ARABIC = "ar-SA-ZariyahNeural"
+TTS_VOICE_ARABIC = "ar-SA-HamedNeural"
 TTS_VOICE_ENGLISH = "en-US-JennyNeural"
+TTS_RATE = "-15%"  # أبطأ للوضوح
 
 # عدد الفيديوهات اليومية
 VIDEOS_PER_DAY = 3
 
-# مواضيع القصص
+# مواضيع القصص - أنبياء فقط
 TOPICS_ARABIC = [
-    "قصة نبي من الأنبياء",
-    "موقف من حياة الصحابة",
-    "معجزة من القرآن",
-    "حدث تاريخي في الإسلام",
-    "قصة صحابي جليل",
-    "قصة من الجنة والنار",
-    "موقف من حياة النبي صلى الله عليه وسلم",
+    "قصة سيدنا آدم عليه السلام وابنه هابيل",
+    "قصة سيدنا نوح عليه السلام والطوفان",
+    "قصة سيدنا إبراهيم عليه السلام والنار",
+    "قصة سيدنا موسى عليه السلام وفرعون",
+    "قصة سيدنا يوسف عليه السلام وإخوته",
+    "قصة سيدنا سليمان عليه السلام والنمل",
+    "قصة سيدنا محمد صلى الله عليه وسلم والإسراء",
+    "قصة سيدنا عيسى عليه السلام والمائدة",
+    "قصة سيدنا يونس عليه السلام والحوت",
+    "قصة سيدنا أيوب عليه السلام والصبر",
 ]
 
 TOPICS_ENGLISH = [
-    "Story of a Prophet",
-    "Story of a Companion",
-    "Islamic historical event",
-    "Miracle in the Quran",
-    "Inspiring Islamic story",
-    "Lesson from Islamic history",
+    "Story of Prophet Adam and his son Abel",
+    "Story of Prophet Noah and the flood",
+    "Story of Prophet Abraham and the fire",
+    "Story of Prophet Moses and Pharaoh",
+    "Story of Prophet Joseph and his brothers",
+    "Story of Prophet Solomon and the ants",
+    "Story of Prophet Muhammad and the night journey",
+    "Story of Prophet Jesus and the table spread",
+    "Story of Prophet Jonah and the whale",
+    "Story of Prophet Job and patience",
 ]

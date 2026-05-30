@@ -38,15 +38,17 @@ def generate_script(language: str) -> dict:
         idx = (history["ar"] - 1) % len(TOPICS_ARABIC)
         topic = TOPICS_ARABIC[idx]
         prompt = (
-            f"اكتب قصة قصيرة بالعربية عن: {topic}\n\n"
+            f"اكتب قصة قصيرة بالعربية الفصحى عن: {topic}\n\n"
             "المتطلبات:\n"
             "- المدة: 45-55 ثانية عند القراءة (150-200 كلمة)\n"
-            "- ابدأ بمقدمة شيقة\n"
-            "- القصة واضحة ومؤثرة ولها عبرة\n"
-            "- خاتمة قوية وحكمة\n"
-            "- أسلوب سردي جذاب\n"
-            "- مناسبة لجميع الأعمار\n\n"
-            "اكتب القصة فقط."
+            "- ابدأ بمقدمة تشد الانتباه\n"
+            "- التزم بالرواية الإسلامية الصحيحة\n"
+            "- القصة واضحة ومؤثرة ولها عبرة وعظة\n"
+            "- خاتمة قوية وحكمة مستفادة\n"
+            "- أسلوب سردي أدبي جذاب\n"
+            "- مناسبة لجميع الأعمار\n"
+            "- ذكر الآيات أو الأحاديث إن أمكن\n\n"
+            "اكتب القصة فقط بدون عنوان."
         )
     else:
         history["en"] += 1
@@ -56,11 +58,13 @@ def generate_script(language: str) -> dict:
             f"Write a short story in English about: {topic}\n\n"
             "Requirements:\n"
             "- Duration: 45-55 seconds (150-200 words)\n"
-            "- Start with an engaging hook\n"
-            "- Clear, inspiring story with a lesson\n"
+            "- Start with an attention-grabbing hook\n"
+            "- Follow authentic Islamic narration\n"
+            "- Clear, inspiring story with a moral lesson\n"
             "- End with a powerful conclusion\n"
+            "- Engaging narrative style\n"
             "- Suitable for all ages\n\n"
-            "Write only the story."
+            "Write only the story without a title."
         )
 
     story = _groq_complete(prompt)
@@ -69,11 +73,14 @@ def generate_script(language: str) -> dict:
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
-    kw_prompt = (
-        f"Extract 5 keywords in English from this story for stock video:\n{story}\n"
-        "Return comma-separated single words only."
+    scene_prompt = (
+        "اقرأ هذه القصة واقترح 5 مشاهد مصورة مناسبة لكل جزء من القصة.\n"
+        "كل مشهد: كلمة واحدة بالانجليزية تصف الصورة المناسبة.\n"
+        "مثال: desert, mosque, sky, ocean, mountain\n"
+        f"القصة:\n{story}\n"
+        "5 كلمات فقط مفصولة بفواصل:"
     )
-    keywords_raw = _groq_complete(kw_prompt)
+    keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]
 
     data = {
