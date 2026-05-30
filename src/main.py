@@ -52,25 +52,32 @@ def run_one(language: str = None):
         })
         return True
     except Exception as e:
-        log_event({"ts": ts, "lang": lang, "error": str(e), "status": "fail"})
+        import traceback
+        tb = traceback.format_exc()
+        log_event({"ts": ts, "lang": lang, "error": str(e), "traceback": tb, "status": "fail"})
         print(f"  ✗ {e}")
+        print(tb)
         return False
 
-def daily():
+def daily() -> bool:
+    ok = True
     print(f"🔥 {VIDEOS_PER_DAY} فيديوهات اليوم")
     for i in range(VIDEOS_PER_DAY):
         lang = "ar" if i % 2 == 0 else "en"
         print(f"\n--- {i+1}/{VIDEOS_PER_DAY} ({lang}) ---")
-        run_one(lang)
+        if not run_one(lang):
+            ok = False
         if i < VIDEOS_PER_DAY - 1:
             wait = random.randint(120, 300)
             print(f"⏳ {wait//60} د...")
             time.sleep(wait)
+    return ok
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["daily"]:
-        daily()
+        ok = daily()
     elif sys.argv[1:2]:
-        run_one(sys.argv[1])
+        ok = run_one(sys.argv[1])
     else:
-        run_one()
+        ok = run_one()
+    sys.exit(0 if ok else 1)
