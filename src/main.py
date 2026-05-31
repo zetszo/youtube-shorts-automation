@@ -4,7 +4,6 @@ import random
 import time
 import os
 from datetime import datetime
-from config import VIDEOS_PER_DAY
 from script_gen import generate_script
 from voiceover import generate_voiceover
 from footage import download_footage
@@ -67,13 +66,7 @@ def run_one(language: str = None):
         return False
 
 def daily() -> bool:
-    ok = True
-    print(f"🔥 {VIDEOS_PER_DAY} فيديوهات اليوم")
-    for i in range(VIDEOS_PER_DAY):
-        lang = "ar" if i % 2 == 0 else "en"
-        print(f"\n--- {i+1}/{VIDEOS_PER_DAY} ({lang}) ---")
-        ok = run_one(lang)
-    return ok
+    return run_one()
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["daily"]:
