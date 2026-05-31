@@ -41,7 +41,7 @@ def _reshape(text: str) -> str:
     if not _HAS_RESHAPER:
         return text
     try:
-        return get_display(arabic_reshaper.reshape(text))
+        return get_display(arabic_reshaper.reshape(text), base_direction='R')
     except Exception:
         return text
 
