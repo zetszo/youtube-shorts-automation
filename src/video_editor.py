@@ -25,10 +25,11 @@ FONT_PATHS = [
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
     "/usr/share/fonts/truetype/tajawal/Tajawal-Bold.ttf",
     "/usr/share/fonts/truetype/cairo/Cairo-Bold.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
-FONT_FALLBACK = "DejaVu-Sans"
 _FONT_CACHE = None
 
 STROKE_WIDTH = 6
@@ -56,27 +57,38 @@ def _ensure_font():
     if not os.path.exists(local):
         urls = [
             "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansArabic/googlefonts/ttf/NotoSansArabic-Bold.ttf",
-            "https://fonts.google.com/download?family=Noto+Sans+Arabic",
         ]
         for url in urls:
             try:
                 urllib.request.urlretrieve(url, local)
-                if os.path.exists(local):
+                if os.path.getsize(local) > 1000:
                     break
             except Exception:
                 continue
-    _FONT_CACHE = local if os.path.exists(local) else FONT_FALLBACK
-    return _FONT_CACHE
+    if os.path.exists(local) and os.path.getsize(local) > 1000:
+        _FONT_CACHE = local
+        return _FONT_CACHE
+    _FONT_CACHE = None
+    return None
 
-def _render_segment_pil(text: str, font_path: str, font_size: int, is_hook: bool = False):
+def _load_font(size: int):
+    path = _ensure_font()
+    if path:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def _render_segment_pil(text: str, font_size: int, is_hook: bool = False):
     words = [w for w in text.split() if w.strip()]
     if not words:
         return None
 
-    pil_font = ImageFont.truetype(font_path, font_size)
+    font = _load_font(font_size)
     pad = BG_PAD
 
-    word_sizes = []
+    word_data = []
     for i, w in enumerate(words):
         reshaped = _reshape(w)
         if not reshaped.strip():
@@ -84,40 +96,47 @@ def _render_segment_pil(text: str, font_path: str, font_size: int, is_hook: bool
         color = (255, 215, 0) if i == 0 else (255, 255, 255)
         mask = Image.new("L", (1, 1), 0)
         draw = ImageDraw.Draw(mask)
-        bbox = draw.textbbox((0, 0), reshaped, font=pil_font, stroke_width=STROKE_WIDTH)
+        bbox = draw.textbbox((0, 0), reshaped, font=font, stroke_width=STROKE_WIDTH)
         cw = bbox[2] - bbox[0]
         ch = bbox[3] - bbox[1]
-        if cw < 2 or ch < 2:
+        if cw < 4 or ch < 4:
             continue
-        word_sizes.append((reshaped, color, cw, ch))
+        off_x = bbox[0]
+        off_y = bbox[1]
+        word_data.append((reshaped, color, cw, ch, off_x, off_y))
 
-    if not word_sizes:
+    if not word_data:
         return None
 
-    total_w = sum(s[2] for s in word_sizes) + (len(word_sizes) - 1) * 10
-    max_h = max(s[3] for s in word_sizes)
+    spacing = 10
+    total_w = sum(d[2] for d in word_data) + (len(word_data) - 1) * spacing
+    max_h = max(d[3] for d in word_data)
     total_w = max(total_w, 10)
     max_h = max(max_h, 10)
 
     bw = int(total_w + pad * 2)
     bh = int(max_h + pad * 2)
 
+    bg = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    bg_draw = ImageDraw.Draw(bg)
     bg_color = (180, 140, 20, 153) if is_hook else (0, 0, 0, 128)
-    bg = Image.new("RGBA", (bw, bh), bg_color)
+    bg_draw.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=12, fill=bg_color)
 
     cx = bw // 2
     x = cx + total_w // 2
-    for reshaped, color, cw, ch in word_sizes:
-        word_img = Image.new("RGBA", (cw + STROKE_WIDTH * 2, ch + STROKE_WIDTH * 2), (0, 0, 0, 0))
+    for reshaped, color, cw, ch, off_x, off_y in word_data:
+        img_w = cw + STROKE_WIDTH * 2
+        img_h = ch + STROKE_WIDTH * 2
+        word_img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
         wdraw = ImageDraw.Draw(word_img)
         wdraw.text(
-            (STROKE_WIDTH, STROKE_WIDTH), reshaped, font=pil_font,
-            fill=color + (255,),
+            (STROKE_WIDTH - off_x, STROKE_WIDTH - off_y),
+            reshaped, font=font, fill=color + (255,),
             stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 255),
         )
         x -= cw
         paste_x = int(x + pad - (cx - total_w // 2))
-        paste_y = int((bh - ch) // 2)
+        paste_y = int((bh - ch) // 2 - off_y)
         bg.paste(word_img, (paste_x, paste_y), word_img)
 
     return ImageClip(np.array(bg)).with_duration(1)
@@ -159,13 +178,11 @@ def create_video(script_data: dict, footage_clips: list) -> str:
         background = concatenate_videoclips(parts, method="compose")
 
     segments = _split_words(story, target)
-    font = _ensure_font()
-
     layers = []
     for idx, (text, start, dur) in enumerate(segments):
         wc = len(text.split())
         fs = 88 if wc <= 2 else 80 if wc == 3 else 72
-        seg = _render_segment_pil(text, font, fs, is_hook=(idx == 0))
+        seg = _render_segment_pil(text, fs, is_hook=(idx == 0))
         if seg is None:
             continue
         sh = seg.size[1]

@@ -8,13 +8,14 @@ from config import PEXELS_API_KEY
 FOOTAGE_DIR = "output/footage"
 os.makedirs(FOOTAGE_DIR, exist_ok=True)
 
-CINE_MODIFIERS = [
-    "cinematic lighting",
-    "volumetric light rays",
-    "golden hour",
-    "soft shadows",
-    "dramatic sky",
-    "ancient architecture",
+# Islamic/historical context modifiers تضاف لكل بحث
+ISLAMIC_MODIFIERS = [
+    "historical middle eastern",
+    "ancient desert landscape",
+    "old city architecture",
+    "middle eastern nature",
+    "desert sand dunes",
+    "ancient arabian",
 ]
 
 def _search_pexels(query: str) -> list:
@@ -81,16 +82,19 @@ def download_footage(script_data: dict, max_clips: int = 15) -> list:
     if not keywords:
         keywords = ["desert landscape", "sky clouds", "ancient city"]
 
+    # نضيف modifier إسلامي/تاريخي لكل كلمة
+    modifier = random.choice(ISLAMIC_MODIFIERS)
+
     search_queries = []
-    # Literal scene matches (highest priority)
     for kw in keywords:
-        search_queries.append(("literal", kw))
-        # Also search with an Islamic modifier for spiritual tone
-        search_queries.append(("literal", f"{kw} mosque"))
-    # Cinematic premium queries
-    modifier = cine_kw[0] if cine_kw else random.choice(CINE_MODIFIERS)
+        # بحث بالكلمة + السياق التاريخي
+        search_queries.append(("literal", f"{kw} {modifier}"))
+        search_queries.append(("literal", kw))  # original also
+
+    # بحث سينمائي بدون ما نضيف حاجات حديثة
     for kw in keywords[:4]:
-        search_queries.append(("cine", f"{kw} {modifier}"))
+        cine = random.choice(cine_kw) if cine_kw else random.choice(ISLAMIC_MODIFIERS)
+        search_queries.append(("cine", f"{kw} {cine}"))
 
     all_candidates = []
     with ThreadPoolExecutor(max_workers=6) as executor:
@@ -112,13 +116,16 @@ def download_footage(script_data: dict, max_clips: int = 15) -> list:
             seen.add(c["id"])
             unique.append(c)
 
-    # Prioritize literal matches first, then cinematic
-    random.shuffle(unique)
-    target = unique[:max_clips]
+    # نفضل النتائج اللي فيها modifier تاريخي
+    priority = [c for c in unique if c.get("qtype") == "literal" and modifier in c.get("query", "")]
+    rest = [c for c in unique if c not in priority]
+    random.shuffle(priority)
+    random.shuffle(rest)
+    ordered = (priority + rest)[:max_clips]
 
     downloaded = []
     with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(_download_video, item) for item in target]
+        futures = [executor.submit(_download_video, item) for item in ordered]
         for future in as_completed(futures):
             try:
                 result = future.result()
