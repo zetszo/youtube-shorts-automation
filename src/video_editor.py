@@ -182,7 +182,7 @@ def _render_segment_pil(text: str, font_size: int, is_hook: bool = False):
     for i, (img, w, h) in enumerate(zip(rendered_lines, line_widths, line_heights)):
         cx = (bw - w) // 2
         bg.paste(img, (cx, cy), img)
-        cy += h + LINE_SPACING
+        cy += h + ls
 
     return ImageClip(np.array(bg)).with_duration(1)
 
