@@ -28,6 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y fonts-noto fonts-noto-cjk fonts-noto-color-emoji
+          sudo apt-get install -y fonts-tajawal fonts-cairo 2>/dev/null || true
 
       - name: Install dependencies
         run: |

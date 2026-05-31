@@ -1,6 +1,7 @@
 import os
 import re
 import random
+import urllib.request
 from datetime import datetime
 from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
@@ -8,28 +9,109 @@ from moviepy import (
 )
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    _HAS_ARABIC_RESHAPER = True
+except ImportError:
+    _HAS_ARABIC_RESHAPER = False
+
 FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
 
 FONT_PATHS = [
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+    "/usr/share/fonts/truetype/tajawal/Tajawal-Bold.ttf",
+    "/usr/share/fonts/truetype/cairo/Cairo-Bold.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
 ]
 FONT_FALLBACK = "DejaVu-Sans"
+_FONT_CACHE = None
 
+STROKE_WIDTH = 6
+BG_PAD = 30
+BG_OPACITY = 0.50
 SAFE_Y = 0.42
-TEXT_WIDTH = VIDEO_WIDTH - 300
-FONT_SIZE = 70
-STROKE_WIDTH = 3
-BG_PAD = 25
-BG_OPACITY = 0.55
+MAX_WORDS_PER_SEGMENT = 3
 
-def _find_font():
+def _reshape(text: str) -> str:
+    if not _HAS_ARABIC_RESHAPER:
+        return text
+    try:
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        return text
+
+def _ensure_font():
+    global _FONT_CACHE
+    if _FONT_CACHE:
+        return _FONT_CACHE
     for p in FONT_PATHS:
         if os.path.exists(p):
+            _FONT_CACHE = p
             return p
-    return FONT_FALLBACK
+    local = "/tmp/NotoSansArabic-Bold.ttf"
+    if not os.path.exists(local):
+        urls = [
+            "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansArabic/googlefonts/ttf/NotoSansArabic-Bold.ttf",
+            "https://fonts.google.com/download?family=Noto+Sans+Arabic",
+        ]
+        for url in urls:
+            try:
+                urllib.request.urlretrieve(url, local)
+                if os.path.exists(local):
+                    break
+            except Exception:
+                continue
+    _FONT_CACHE = local if os.path.exists(local) else FONT_FALLBACK
+    return _FONT_CACHE
+
+def _make_word_clip(word: str, font: str, size: int, color: str):
+    return TextClip(
+        text=_reshape(word),
+        font=font,
+        font_size=size,
+        color=color,
+        stroke_color="black",
+        stroke_width=STROKE_WIDTH,
+        method="label",
+    )
+
+def _render_segment(text: str, font: str, font_size: int, is_hook: bool = False):
+    words = text.split()
+    visual_words = [_reshape(w) for w in words]
+
+    clips = []
+    total_w = 0
+    max_h = 0
+    for i, vw in enumerate(visual_words):
+        color = "#FFD700" if i == 0 else "white"
+        c = _make_word_clip(vw, font, font_size, color)
+        cw, ch = c.size
+        clips.append((c, cw, ch))
+        total_w += cw + 10
+        max_h = max(max_h, ch)
+
+    total_w -= 10
+    pad = BG_PAD
+
+    # Layout: first word on the right for Arabic RTL
+    cx = VIDEO_WIDTH // 2
+    x = cx + total_w // 2
+    layer_clips = []
+    for clip, cw, ch in clips:
+        x -= cw
+        layer_clips.append(clip.with_position((int(x), 0)))
+        x -= 10
+
+    bg_color = (180, 140, 20) if is_hook else (0, 0, 0)
+    bg_op = 0.60 if is_hook else BG_OPACITY
+    bg = ColorClip(size=(int(total_w + pad * 2), int(max_h + pad * 2)), color=bg_color)
+    bg = bg.with_opacity(bg_op).with_position((int(cx - total_w / 2 - pad), 0))
+
+    seg = CompositeVideoClip([bg] + layer_clips)
+    return seg, total_w + pad * 2, max_h + pad * 2
 
 def create_video(script_data: dict, footage_clips: list) -> str:
     story = script_data["story"]
@@ -64,62 +146,24 @@ def create_video(script_data: dict, footage_clips: list) -> str:
             parts.append(sub)
             remaining -= dur
             i += 1
-
         if not parts:
             parts = [ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)]
-
         background = concatenate_videoclips(parts, method="compose")
 
-    segments = _split_into_segments(story, target)
-    font = _find_font()
+    segments = _split_words(story, target)
+    font = _ensure_font()
 
     layers = []
-    for text, start, dur in segments:
-        try:
-            txt = TextClip(
-                text=text,
-                font=font,
-                font_size=FONT_SIZE,
-                color="white",
-                stroke_color="black",
-                stroke_width=STROKE_WIDTH,
-                method="caption",
-                size=(TEXT_WIDTH, None),
-                text_align="center",
-            )
-        except Exception:
-            txt = TextClip(
-                text=text,
-                font=FONT_FALLBACK,
-                font_size=FONT_SIZE - 8,
-                color="white",
-                stroke_color="black",
-                stroke_width=STROKE_WIDTH,
-                method="label",
-            )
+    for idx, (text, start, dur) in enumerate(segments):
+        wc = len(text.split())
+        fs = 88 if wc <= 2 else 80 if wc == 3 else 72
+        is_hook = idx == 0
+        seg, sw, sh = _render_segment(text, font, fs, is_hook)
+        y_pos = int(SAFE_Y * VIDEO_HEIGHT - sh / 2)
+        seg = seg.with_position(("center", y_pos)).with_duration(dur).with_start(start)
+        layers.append(seg)
 
-        try:
-            tw, th = txt.size
-        except Exception:
-            tw, th = TEXT_WIDTH, int(FONT_SIZE * 2.5)
-
-        bg_w = tw + BG_PAD * 2
-        bg_h = th + BG_PAD * 2
-
-        txt_bg = (ColorClip(size=(int(bg_w), int(bg_h)), color=(0, 0, 0))
-                  .with_opacity(BG_OPACITY))
-        txt_layer = txt.with_position(("center", "center"))
-
-        segment = (CompositeVideoClip([txt_bg, txt_layer])
-                   .with_position(("center", int(SAFE_Y * VIDEO_HEIGHT - bg_h / 2)))
-                   .with_duration(dur)
-                   .with_start(start))
-        layers.append(segment)
-
-    final = CompositeVideoClip(
-        [background] + layers,
-        size=(VIDEO_WIDTH, VIDEO_HEIGHT)
-    )
+    final = CompositeVideoClip([background] + layers, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
     final = final.with_audio(audio).with_duration(target)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -131,33 +175,32 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     script_data["video_file"] = out
     return out
 
-def _split_into_segments(text: str, total_duration: float) -> list:
-    sentences = re.split(r'(?<=[.!?؟!])', text)
-    sentences = [s.strip() for s in sentences if s.strip()]
-
-    if len(sentences) < 3:
-        words = text.split()
-        chunk = max(1, len(words) // 3)
-        sentences = []
-        for i in range(0, len(words), chunk):
-            sentences.append(" ".join(words[i:i + chunk]))
-
-    total_words = sum(len(s.split()) for s in sentences)
-    if total_words == 0:
+def _split_words(text: str, total_duration: float) -> list:
+    words = text.split()
+    if len(words) <= MAX_WORDS_PER_SEGMENT:
         return [(text, 0, total_duration)]
 
+    chunks = []
+    i = 0
+    while i < len(words):
+        n = 2 if random.random() < 0.4 else 3
+        if i + n > len(words):
+            n = len(words) - i
+        chunks.append(" ".join(words[i:i + n]))
+        i += n
+
+    total_words = len(words)
     result = []
     current = 0
-    for s in sentences:
-        wc = len(s.split())
-        dur = max(1.5, (wc / total_words) * total_duration)
+    for chunk in chunks:
+        wc = len(chunk.split())
+        dur = max(2.0, (wc / total_words) * total_duration)
         if current + dur > total_duration:
             dur = total_duration - current
-        if dur > 0.5:
-            result.append((s, current, dur))
+        if dur > 0.8:
+            result.append((chunk, current, dur))
             current += dur
 
     if not result:
         result = [(text, 0, total_duration)]
-
     return result
