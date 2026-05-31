@@ -22,9 +22,9 @@ FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
 
 FONT_PATHS = [
-    "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
-    "/usr/share/fonts/truetype/tajawal/Tajawal-Bold.ttf",
     "/usr/share/fonts/truetype/cairo/Cairo-Bold.ttf",
+    "/usr/share/fonts/truetype/tajawal/Tajawal-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
     "/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
@@ -53,21 +53,21 @@ def _ensure_font():
         if os.path.exists(p):
             _FONT_CACHE = p
             return p
-    local = "/tmp/NotoSansArabic-Bold.ttf"
-    if not os.path.exists(local):
-        urls = [
-            "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansArabic/googlefonts/ttf/NotoSansArabic-Bold.ttf",
-        ]
-        for url in urls:
-            try:
-                urllib.request.urlretrieve(url, local)
-                if os.path.getsize(local) > 1000:
-                    break
-            except Exception:
-                continue
-    if os.path.exists(local) and os.path.getsize(local) > 1000:
-        _FONT_CACHE = local
-        return _FONT_CACHE
+    candidates = [
+        ("/tmp/Cairo-Bold.ttf", "https://cdn.jsdelivr.net/gh/Gue3bara/Cairo@main/fonts/Cairo-Bold.ttf"),
+        ("/tmp/NotoSansArabic-Bold.ttf", "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansArabic/googlefonts/ttf/NotoSansArabic-Bold.ttf"),
+    ]
+    for local_path, url in candidates:
+        if os.path.exists(local_path) and os.path.getsize(local_path) > 1000:
+            _FONT_CACHE = local_path
+            return _FONT_CACHE
+        try:
+            urllib.request.urlretrieve(url, local_path)
+            if os.path.getsize(local_path) > 1000:
+                _FONT_CACHE = local_path
+                return _FONT_CACHE
+        except Exception:
+            continue
     _FONT_CACHE = None
     return None
 
@@ -122,16 +122,27 @@ def _render_line(line_words, font, fs, make_first_gold):
     total_w = max(total_w, 10)
     max_h = max(max_h, 10)
 
-    line_img = Image.new("RGBA", (int(total_w + STROKE_WIDTH * 4), int(max_h + STROKE_WIDTH * 4)), (0, 0, 0, 0))
-    li_w = total_w + STROKE_WIDTH * 4
-    li_h = max_h + STROKE_WIDTH * 4
+    line_img = Image.new("RGBA", (int(total_w + STROKE_WIDTH * 6), int(max_h + STROKE_WIDTH * 6)), (0, 0, 0, 0))
+    li_w = total_w + STROKE_WIDTH * 6
+    li_h = max_h + STROKE_WIDTH * 6
 
     x = li_w // 2 + total_w // 2
     for r_text, color, cw, ch, ox, oy in reshaped:
-        word_img = Image.new("RGBA", (int(cw + STROKE_WIDTH * 2), int(ch + STROKE_WIDTH * 2)), (0, 0, 0, 0))
+        iw = int(cw + STROKE_WIDTH * 4)
+        ih = int(ch + STROKE_WIDTH * 4)
+        word_img = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
+        so = 3
+        sh = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sh)
+        sd.text(
+            (STROKE_WIDTH * 2 - ox + so, STROKE_WIDTH * 2 - oy + so),
+            r_text, font=font, fill=(0, 0, 0, 80),
+            stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 80),
+        )
+        word_img = Image.alpha_composite(word_img, sh)
         wd = ImageDraw.Draw(word_img)
         wd.text(
-            (STROKE_WIDTH - ox, STROKE_WIDTH - oy),
+            (STROKE_WIDTH * 2 - ox, STROKE_WIDTH * 2 - oy),
             r_text, font=font, fill=color + (255,),
             stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 255),
         )
