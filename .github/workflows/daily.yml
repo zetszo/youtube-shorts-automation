@@ -5,15 +5,6 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
-      language:
-        description: "لغة الفيديو (ar/en)"
-        required: false
-        default: ""
-        type: choice
-        options:
-          - ""
-          - ar
-          - en
       upload:
         description: "رفع إلى YouTube"
         required: true
@@ -83,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -u src/main.py ${{ inputs.language }} > /tmp/pipeline_stdout.log 2> /tmp/pipeline_stderr.log
+          python -u src/main.py > /tmp/pipeline_stdout.log 2> /tmp/pipeline_stderr.log
           EXIT_CODE=$?
           echo "=== EXIT CODE: $EXIT_CODE ==="
           echo "=== STDOUT ==="

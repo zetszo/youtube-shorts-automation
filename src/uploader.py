@@ -31,25 +31,14 @@ def upload_video(script_data: dict) -> str:
     if not video or not os.path.exists(video):
         raise FileNotFoundError(f"Video not found: {video}")
 
-    lang = script_data["language"]
-    topic = script_data.get("topic", "Islamic Story")
-
-    if lang == "ar":
-        title = topic if len(topic) <= 100 else topic[:97] + "..."
-        desc = (
-            "قصص إسلامية وعبر من التاريخ\n"
-            "اشترك في القناة للمزيد 🕌\n\n"
-            "#قصص_إسلامية #Shorts #عبر"
-        )
-        tags = ["قصص إسلامية", "Shorts", "عبر", "تاريخ إسلامي", "ديني"]
-    else:
-        title = topic if len(topic) <= 100 else topic[:97] + "..."
-        desc = (
-            "Inspiring Islamic stories\n"
-            "Subscribe for more 🕌\n\n"
-            "#Islamic #Shorts #History"
-        )
-        tags = ["Islamic", "Shorts", "History", "Stories", "Inspirational"]
+    topic = script_data.get("topic", "قصة إسلامية")
+    title = topic if len(topic) <= 100 else topic[:97] + "..."
+    desc = (
+        "قصص إسلامية وعبر من التاريخ\n"
+        "اشترك في القناة للمزيد 🕌\n\n"
+        "#قصص_إسلامية #Shorts #عبر"
+    )
+    tags = ["قصص إسلامية", "Shorts", "عبر", "تاريخ إسلامي", "ديني"]
 
     body = {
         "snippet": {

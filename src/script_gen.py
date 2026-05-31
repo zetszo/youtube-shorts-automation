@@ -2,14 +2,14 @@ import json
 import os
 import requests
 from datetime import datetime
-from config import GROQ_API_KEY, GROQ_MODEL_AR, GROQ_MODEL_EN, TOPICS_ARABIC, TOPICS_ENGLISH
+from config import GROQ_API_KEY, GROQ_MODEL, TOPICS_ARABIC
 
 HISTORY_FILE = "output/history.json"
 SCRIPTS_DIR = "output/scripts"
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 
-def _groq_complete(prompt: str, model: str = None) -> str:
+def _groq_complete(prompt: str) -> str:
     resp = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={
@@ -17,7 +17,7 @@ def _groq_complete(prompt: str, model: str = None) -> str:
             "Content-Type": "application/json",
         },
         json={
-            "model": model or GROQ_MODEL_EN,
+            "model": GROQ_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "max_tokens": 1024,
@@ -27,56 +27,38 @@ def _groq_complete(prompt: str, model: str = None) -> str:
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
 
-def generate_script(language: str) -> dict:
-    history = {"ar": 0, "en": 0}
+def generate_script(language: str = "ar") -> dict:
+    history = 0
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, encoding="utf-8") as f:
-            history = json.load(f)
+            history = json.load(f).get("count", 0)
 
-    if language == "ar":
-        history["ar"] += 1
-        idx = (history["ar"] - 1) % len(TOPICS_ARABIC)
-        topic = TOPICS_ARABIC[idx]
-        prompt = (
-            f"اكتب قصة قصيرة بالعربية الفصحى عن: {topic}\n\n"
-            "المتطلبات:\n"
-            "- المدة: 45-55 ثانية عند القراءة (150-200 كلمة)\n"
-            "- ابدأ بمقدمة تشد الانتباه\n"
-            "- التزم بالرواية الإسلامية الصحيحة\n"
-            "- القصة واضحة ومؤثرة ولها عبرة وعظة\n"
-            "- خاتمة قوية وحكمة مستفادة\n"
-            "- أسلوب سردي أدبي جذاب\n"
-            "- مناسبة لجميع الأعمار\n"
-            "- ذكر الآيات أو الأحاديث إن أمكن\n\n"
-            "اكتب القصة فقط بدون عنوان."
-        )
-    else:
-        history["en"] += 1
-        idx = (history["en"] - 1) % len(TOPICS_ENGLISH)
-        topic = TOPICS_ENGLISH[idx]
-        prompt = (
-            f"Write a short story in English about: {topic}\n\n"
-            "Requirements:\n"
-            "- Duration: 45-55 seconds (150-200 words)\n"
-            "- Start with an attention-grabbing hook\n"
-            "- Follow authentic Islamic narration\n"
-            "- Clear, inspiring story with a moral lesson\n"
-            "- End with a powerful conclusion\n"
-            "- Engaging narrative style\n"
-            "- Suitable for all ages\n\n"
-            "Write only the story without a title."
-        )
+    history += 1
+    idx = (history - 1) % len(TOPICS_ARABIC)
+    topic = TOPICS_ARABIC[idx]
+    prompt = (
+        f"اكتب قصة قصيرة بالعربية الفصحى عن: {topic}\n\n"
+        "المتطلبات:\n"
+        "- المدة: 45-55 ثانية عند القراءة (150-200 كلمة)\n"
+        "- ابدأ بمقدمة تشد الانتباه\n"
+        "- التزم بالرواية الإسلامية الصحيحة\n"
+        "- القصة واضحة ومؤثرة ولها عبرة وعظة\n"
+        "- خاتمة قوية وحكمة مستفادة\n"
+        "- أسلوب سردي أدبي جذاب\n"
+        "- مناسبة لجميع الأعمار\n"
+        "- ذكر الآيات أو الأحاديث إن أمكن\n\n"
+        "اكتب القصة فقط بدون عنوان."
+    )
 
-    model = GROQ_MODEL_AR if language == "ar" else GROQ_MODEL_EN
-    story = _groq_complete(prompt, model)
+    story = _groq_complete(prompt)
     story = _clean_text(story)
 
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+        json.dump({"count": history}, f, ensure_ascii=False, indent=2)
 
     scene_prompt = (
-        "Extract 7 specific LITERAL visual scenes from this story.\n"
-        "Each scene must be a concrete keyword (2-4 words) that EXACTLY matches a moment in the story.\n"
+        "Extract 7 specific LITERAL visual scenes from this Arabic story.\n"
+        "Each scene must be a concrete English keyword (2-4 words) that EXACTLY matches a moment.\n"
         "NO metaphors, NO abstract concepts. Only things you can SEE in a video.\n"
         "Examples: Moses staff turning snake, fire burning wood, man walking through parted sea,\n"
         "baby floating in river basket, man climbing mountain with sheep.\n"
@@ -97,7 +79,7 @@ def generate_script(language: str) -> dict:
     cine_keywords = [k.strip() for k in cine_raw.replace("\n", ",").split(",") if k.strip()]
 
     data = {
-        "language": language,
+        "language": "ar",
         "topic": topic,
         "story": story,
         "keywords": keywords[:7],
@@ -105,7 +87,7 @@ def generate_script(language: str) -> dict:
     }
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(SCRIPTS_DIR, f"script_{ts}_{language}.json")
+    path = os.path.join(SCRIPTS_DIR, f"script_{ts}_ar.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 

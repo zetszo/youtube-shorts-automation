@@ -25,7 +25,7 @@ def log_event(event: dict):
 
 def run_one(language: str = None):
     start = time.time()
-    lang = language or random.choice(["ar", "en"])
+    lang = "ar"
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] بدء: {lang}")
 
