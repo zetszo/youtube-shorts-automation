@@ -92,13 +92,13 @@ def generate_script(language: str = "ar") -> dict:
     time.sleep(1)
 
     scene_prompt = (
-        "Extract 7 specific LITERAL visual scenes from this Arabic story.\n"
-        "Each scene must be a concrete English keyword (2-4 words) that EXACTLY matches a moment.\n"
-        "NO metaphors, NO abstract concepts. Only things you can SEE in a video.\n"
-        "Examples: Moses staff turning snake, fire burning wood, man walking through parted sea,\n"
-        "baby floating in river basket, man climbing mountain with sheep.\n"
+        "Extract 7 specific visual scenes from this Arabic story.\n"
+        "Focus on: landscapes, architecture, nature, sky, desert, mountains, sea, objects.\n"
+        "AVOID women or female figures. Use 'ancient', 'historical', 'middle eastern' context.\n"
+        "Examples: desert sand dunes at sunset, ancient stone architecture, dramatic sky over mountain,\n"
+        "camel walking in desert, old manuscript, mosque interior, starry night sky.\n"
         f"Story:\n{story}\n"
-        "7 comma-separated keywords (each 2-4 specific words):"
+        "7 comma-separated keywords (each 2-4 specific words, nature/ancient focused):"
     )
     keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]

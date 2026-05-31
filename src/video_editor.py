@@ -33,9 +33,10 @@ FONT_PATHS = [
 _FONT_CACHE = None
 
 STROKE_WIDTH = 6
-BG_PAD = 30
-BG_OPACITY = 0.50
+BG_PAD = 35
+BG_OPACITY = 0.55
 SAFE_Y = 0.42
+LINE_SPACING = 12
 
 def _reshape(text: str) -> str:
     if not _HAS_RESHAPER:
@@ -80,64 +81,108 @@ def _load_font(size: int):
             pass
     return ImageFont.load_default()
 
+def _measure(text: str, font):
+    m = Image.new("L", (1, 1), 0)
+    d = ImageDraw.Draw(m)
+    b = d.textbbox((0, 0), text, font=font, stroke_width=STROKE_WIDTH)
+    return b[2] - b[0], b[3] - b[1], b[0], b[1]
+
+def _wrap_lines(words):
+    n = len(words)
+    if n <= 2:
+        return [words]
+    if n == 3:
+        split = 1 if random.random() < 0.5 else 2
+        return [words[:split], words[split:]]
+    if n == 4:
+        return [words[:2], words[2:]]
+    half = (n + 1) // 2
+    return [words[:half], words[half:]]
+
+def _render_line(line_words, font, fs, make_first_gold):
+    reshaped = []
+    offsets = []
+    total_w = 0
+    max_h = 0
+    for i, w in enumerate(line_words):
+        r = _reshape(w)
+        if not r.strip():
+            continue
+        cw, ch, ox, oy = _measure(r, font)
+        if cw < 4 or ch < 4:
+            continue
+        color = (255, 215, 0) if (i == 0 and make_first_gold) else (255, 255, 255)
+        reshaped.append((r, color, cw, ch, ox, oy))
+        total_w += cw + 10
+        max_h = max(max_h, ch)
+
+    if not reshaped:
+        return None, 0, 0
+
+    total_w -= 10
+    total_w = max(total_w, 10)
+    max_h = max(max_h, 10)
+
+    line_img = Image.new("RGBA", (int(total_w + STROKE_WIDTH * 4), int(max_h + STROKE_WIDTH * 4)), (0, 0, 0, 0))
+    li_w = total_w + STROKE_WIDTH * 4
+    li_h = max_h + STROKE_WIDTH * 4
+
+    x = li_w // 2 + total_w // 2
+    for r_text, color, cw, ch, ox, oy in reshaped:
+        word_img = Image.new("RGBA", (int(cw + STROKE_WIDTH * 2), int(ch + STROKE_WIDTH * 2)), (0, 0, 0, 0))
+        wd = ImageDraw.Draw(word_img)
+        wd.text(
+            (STROKE_WIDTH - ox, STROKE_WIDTH - oy),
+            r_text, font=font, fill=color + (255,),
+            stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 255),
+        )
+        x -= cw
+        px = int(x + STROKE_WIDTH * 2 - (li_w // 2 - total_w // 2))
+        py = int((li_h - ch) // 2 - oy)
+        line_img.paste(word_img, (px, py), word_img)
+
+    return line_img, li_w, li_h
+
 def _render_segment_pil(text: str, font_size: int, is_hook: bool = False):
     words = [w for w in text.split() if w.strip()]
     if not words:
         return None
 
     font = _load_font(font_size)
-    pad = BG_PAD
+    lines = _wrap_lines(words)
 
-    word_data = []
-    for i, w in enumerate(words):
-        reshaped = _reshape(w)
-        if not reshaped.strip():
-            continue
-        color = (255, 215, 0) if i == 0 else (255, 255, 255)
-        mask = Image.new("L", (1, 1), 0)
-        draw = ImageDraw.Draw(mask)
-        bbox = draw.textbbox((0, 0), reshaped, font=font, stroke_width=STROKE_WIDTH)
-        cw = bbox[2] - bbox[0]
-        ch = bbox[3] - bbox[1]
-        if cw < 4 or ch < 4:
-            continue
-        off_x = bbox[0]
-        off_y = bbox[1]
-        word_data.append((reshaped, color, cw, ch, off_x, off_y))
+    rendered_lines = []
+    line_widths = []
+    line_heights = []
 
-    if not word_data:
+    for li, lw in enumerate(lines):
+        img, w, h = _render_line(lw, font, font_size, make_first_gold=(li == 0))
+        if img is None:
+            continue
+        rendered_lines.append(img)
+        line_widths.append(w)
+        line_heights.append(h)
+
+    if not rendered_lines:
         return None
 
-    spacing = 10
-    total_w = sum(d[2] for d in word_data) + (len(word_data) - 1) * spacing
-    max_h = max(d[3] for d in word_data)
-    total_w = max(total_w, 10)
-    max_h = max(max_h, 10)
+    max_w = max(line_widths)
+    total_h = sum(line_heights) + (len(rendered_lines) - 1) * LINE_SPACING
+    pad = BG_PAD
 
-    bw = int(total_w + pad * 2)
-    bh = int(max_h + pad * 2)
+    bw = int(max_w + pad * 2)
+    bh = int(total_h + pad * 2)
 
     bg = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
     bg_draw = ImageDraw.Draw(bg)
-    bg_color = (180, 140, 20, 153) if is_hook else (0, 0, 0, 128)
-    bg_draw.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=12, fill=bg_color)
+    bg_color = (180, 140, 20, 160) if is_hook else (0, 0, 0, 140)
+    bg_draw.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=14, fill=bg_color)
 
-    cx = bw // 2
-    x = cx + total_w // 2
-    for reshaped, color, cw, ch, off_x, off_y in word_data:
-        img_w = cw + STROKE_WIDTH * 2
-        img_h = ch + STROKE_WIDTH * 2
-        word_img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
-        wdraw = ImageDraw.Draw(word_img)
-        wdraw.text(
-            (STROKE_WIDTH - off_x, STROKE_WIDTH - off_y),
-            reshaped, font=font, fill=color + (255,),
-            stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 255),
-        )
-        x -= cw
-        paste_x = int(x + pad - (cx - total_w // 2))
-        paste_y = int((bh - ch) // 2 - off_y)
-        bg.paste(word_img, (paste_x, paste_y), word_img)
+    cy = (bh - total_h) // 2
+    for i, (img, w, h) in enumerate(zip(rendered_lines, line_widths, line_heights)):
+        cx = (bw - w) // 2
+        bg.paste(img, (cx, cy), img)
+        cy += h + LINE_SPACING
 
     return ImageClip(np.array(bg)).with_duration(1)
 
@@ -181,7 +226,7 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     layers = []
     for idx, (text, start, dur) in enumerate(segments):
         wc = len(text.split())
-        fs = 88 if wc <= 2 else 80 if wc == 3 else 72
+        fs = 88 if wc <= 2 else 80 if wc <= 4 else 72
         seg = _render_segment_pil(text, fs, is_hook=(idx == 0))
         if seg is None:
             continue
@@ -204,13 +249,13 @@ def create_video(script_data: dict, footage_clips: list) -> str:
 
 def _split_words(text: str, total_duration: float) -> list:
     words = text.split()
-    if len(words) <= 3:
+    if len(words) <= 4:
         return [(text, 0, total_duration)]
 
     chunks = []
     i = 0
     while i < len(words):
-        n = 2 if random.random() < 0.4 else 3
+        n = random.choices([3, 4], weights=[0.4, 0.6])[0]
         if i + n > len(words):
             n = len(words) - i
         chunks.append(" ".join(words[i:i + n]))
@@ -221,10 +266,10 @@ def _split_words(text: str, total_duration: float) -> list:
     current = 0
     for chunk in chunks:
         wc = len(chunk.split())
-        dur = max(2.0, (wc / total_words) * total_duration)
+        dur = max(2.5, (wc / total_words) * total_duration)
         if current + dur > total_duration:
             dur = total_duration - current
-        if dur > 0.8:
+        if dur > 1.0:
             result.append((chunk, current, dur))
             current += dur
 
