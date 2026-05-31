@@ -30,7 +30,7 @@ def run_one(language: str = None):
 
     try:
         sd = generate_script(lang)
-        print(f"  ✓ قصة ({len(sd['story'].split())} كلمة)")
+        print(f"  ✓ قصة #{sd['topic_id']} ({len(sd['story'].split())} كلمة)")
 
         generate_voiceover(sd)
         print(f"  ✓ صوت")
@@ -45,13 +45,13 @@ def run_one(language: str = None):
             url = upload_video(sd)
             print(f"  ✓ رفع: {url}")
             log_event({
-                "ts": ts, "lang": lang, "topic": sd["topic"],
+                "ts": ts, "topic_id": sd["topic_id"], "topic": sd["topic"],
                 "youtube_url": url, "seconds": round(time.time() - start, 1),
                 "status": "ok",
             })
         else:
             log_event({
-                "ts": ts, "lang": lang, "topic": sd["topic"],
+                "ts": ts, "topic_id": sd["topic_id"], "topic": sd["topic"],
                 "video_file": sd.get("video_file"),
                 "seconds": round(time.time() - start, 1),
                 "status": "preview",

@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import requests
 from datetime import datetime
 from config import GROQ_API_KEY, GROQ_MODEL, TOPICS_ARABIC
@@ -8,6 +9,8 @@ HISTORY_FILE = "output/history.json"
 SCRIPTS_DIR = "output/scripts"
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+
+USED_WINDOW = 5
 
 def _groq_complete(prompt: str) -> str:
     resp = requests.post(
@@ -28,14 +31,26 @@ def _groq_complete(prompt: str) -> str:
     return resp.json()["choices"][0]["message"]["content"].strip()
 
 def generate_script(language: str = "ar") -> dict:
-    history = 0
+    history = {"used": [], "total": 0}
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, encoding="utf-8") as f:
-            history = json.load(f).get("count", 0)
+            history = json.load(f)
 
-    history += 1
-    idx = (history - 1) % len(TOPICS_ARABIC)
-    topic = TOPICS_ARABIC[idx]
+    # Pick a random topic not used recently
+    available = [t for t in TOPICS_ARABIC if t[0] not in history["used"]]
+    if not available:
+        history["used"] = []
+        available = TOPICS_ARABIC
+
+    idx, topic = random.choice(available)
+    history["used"].append(idx)
+    if len(history["used"]) > USED_WINDOW:
+        history["used"] = history["used"][-USED_WINDOW:]
+    history["total"] += 1
+
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
     prompt = (
         f"اكتب قصة قصيرة بالعربية الفصحى عن: {topic}\n\n"
         "المتطلبات:\n"
@@ -52,9 +67,6 @@ def generate_script(language: str = "ar") -> dict:
 
     story = _groq_complete(prompt)
     story = _clean_text(story)
-
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump({"count": history}, f, ensure_ascii=False, indent=2)
 
     scene_prompt = (
         "Extract 7 specific LITERAL visual scenes from this Arabic story.\n"
@@ -79,7 +91,7 @@ def generate_script(language: str = "ar") -> dict:
     cine_keywords = [k.strip() for k in cine_raw.replace("\n", ",").split(",") if k.strip()]
 
     data = {
-        "language": "ar",
+        "topic_id": idx,
         "topic": topic,
         "story": story,
         "keywords": keywords[:7],

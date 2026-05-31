@@ -34,7 +34,6 @@ def _find_font():
 def create_video(script_data: dict, footage_clips: list) -> str:
     story = script_data["story"]
     audio_path = script_data["audio_file"]
-    lang = script_data["language"]
 
     audio = AudioFileClip(audio_path)
     target = audio.duration
@@ -124,7 +123,7 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     final = final.with_audio(audio).with_duration(target)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = os.path.join(FINAL_DIR, f"shorts_{ts}_{lang}.mp4")
+    out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
     final.write_videofile(out, fps=30, codec="libx264", audio_codec="aac", threads=2, preset="medium", logger=None)
     audio.close()
     final.close()
