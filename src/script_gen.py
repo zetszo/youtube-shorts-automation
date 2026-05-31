@@ -11,8 +11,6 @@ SCRIPTS_DIR = "output/scripts"
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 
-USED_WINDOW = 5
-
 def _groq_complete(prompt: str, retries: int = 5) -> str:
     for attempt in range(retries):
         resp = requests.post(
@@ -39,21 +37,37 @@ def _groq_complete(prompt: str, retries: int = 5) -> str:
     resp.raise_for_status()
 
 def generate_script(language: str = "ar") -> dict:
-    history = {"used": [], "total": 0}
+    history = {"used_ids": [], "total": 0, "next_dynamic_id": 21, "custom_topics": {}}
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, encoding="utf-8") as f:
             history = json.load(f)
 
-    # Pick a random topic not used recently
-    available = [t for t in TOPICS_ARABIC if t[0] not in history["used"]]
-    if not available:
-        history["used"] = []
-        available = TOPICS_ARABIC
+    # Check if any predefined topics are still unused
+    available = [t for t in TOPICS_ARABIC if t[0] not in history["used_ids"]]
 
-    idx, topic = random.choice(available)
-    history["used"].append(idx)
-    if len(history["used"]) > USED_WINDOW:
-        history["used"] = history["used"][-USED_WINDOW:]
+    if available:
+        idx, topic = random.choice(available)
+        print(f"  📜 قصة #{idx} من القائمة")
+    else:
+        # All predefined topics used — generate a brand new topic via Groq
+        used_list = TOPICS_ARABIC + [(k, v) for k, v in history.get("custom_topics", {}).items()]
+        used_str = "\n".join(f"- {t}" for _, t in used_list)
+        new_topic_prompt = (
+            "اقترح موضوعاً جديداً وفريداً لقصة إسلامية قصيرة لم يُستخدم من قبل.\n"
+            "المواضيع المستخدمة سابقاً:\n"
+            f"{used_str}\n\n"
+            "اكتب موضوعاً واحداً فقط مختلفاً تماماً عما سبق:\n"
+            "مثال: قصة سيدنا إسحاق عليه السلام أو قصة عبد الرحمن بن عوف رضي الله عنه"
+        )
+        new_topic = _groq_complete(new_topic_prompt)
+        new_topic = new_topic.strip().strip('"').strip("'")
+        idx = history["next_dynamic_id"]
+        history["next_dynamic_id"] += 1
+        topic = new_topic
+        history.setdefault("custom_topics", {})[str(idx)] = topic
+        print(f"  🆕 قصة #{idx} جديدة: {topic[:50]}...")
+
+    history["used_ids"].append(idx)
     history["total"] += 1
 
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
