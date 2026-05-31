@@ -2,6 +2,7 @@ import json
 import os
 import random
 import requests
+import time
 from datetime import datetime
 from config import GROQ_API_KEY, GROQ_MODEL, TOPICS_ARABIC
 
@@ -12,23 +13,30 @@ os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 
 USED_WINDOW = 5
 
-def _groq_complete(prompt: str) -> str:
-    resp = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": GROQ_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
-            "max_tokens": 1024,
-        },
-        timeout=60,
-    )
+def _groq_complete(prompt: str, retries: int = 5) -> str:
+    for attempt in range(retries):
+        resp = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7,
+                "max_tokens": 1024,
+            },
+            timeout=60,
+        )
+        if resp.status_code == 429:
+            wait = 2 ** attempt
+            print(f"  ⏳ Groq rate limit, انتظار {wait}ث ({attempt+1}/{retries})")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
 
 def generate_script(language: str = "ar") -> dict:
     history = {"used": [], "total": 0}
@@ -67,6 +75,7 @@ def generate_script(language: str = "ar") -> dict:
 
     story = _groq_complete(prompt)
     story = _clean_text(story)
+    time.sleep(1)
 
     scene_prompt = (
         "Extract 7 specific LITERAL visual scenes from this Arabic story.\n"
@@ -79,6 +88,7 @@ def generate_script(language: str = "ar") -> dict:
     )
     keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]
+    time.sleep(1)
 
     cine_prompt = (
         "For this story, list 6 cinematic search modifiers for premium video footage.\n"
