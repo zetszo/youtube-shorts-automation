@@ -91,10 +91,12 @@ def _wrap_lines(words):
     if n <= 2:
         return [words]
     if n == 3:
-        split = 1 if random.random() < 0.5 else 2
-        return [words[:split], words[split:]]
+        # Prefer 2+1 over 1+2 for better balance
+        return [words[:2], words[2:]]
     if n == 4:
         return [words[:2], words[2:]]
+    if n == 5:
+        return [words[:3], words[3:]]
     half = (n + 1) // 2
     return [words[:half], words[half:]]
 
@@ -233,7 +235,8 @@ def create_video(script_data: dict, footage_clips: list) -> str:
             parts = [ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)]
         background = concatenate_videoclips(parts, method="compose")
 
-    segments = _split_words(story, target)
+    word_timings = script_data.get("word_timings", [])
+    segments = _build_timed_segments(story, word_timings)
     layers = []
     for idx, (text, start, dur) in enumerate(segments):
         wc = len(text.split())
@@ -261,32 +264,60 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     script_data["video_file"] = out
     return out
 
-def _split_words(text: str, total_duration: float) -> list:
-    words = text.split()
-    if len(words) <= 4:
-        return [(text, 0, total_duration)]
+def _build_timed_segments(text: str, word_timings: list) -> list:
+    """Build segments using actual word-level timestamps from edge-tts."""
+    if not word_timings:
+        total_dur = 50
+        words = text.split()
+        if len(words) <= 4:
+            return [(text, 0, total_dur)]
+        chunks = []
+        i = 0
+        while i < len(words):
+            n = random.choices([3, 4], weights=[0.4, 0.6])[0]
+            if i + n > len(words):
+                n = len(words) - i
+            chunks.append(" ".join(words[i:i + n]))
+            i += n
+        result = []
+        cur = 0
+        for c in chunks:
+            wc = len(c.split())
+            d = max(2.5, (wc / len(words)) * total_dur)
+            if cur + d > total_dur:
+                d = total_dur - cur
+            if d > 1.2:
+                result.append((c, cur, d))
+                cur += d + 0.15
+        return result or [(text, 0, total_dur)]
 
-    chunks = []
+    # Filter to content words only
+    content = [w for w in word_timings if w["text"].strip() and any(c.isalpha() for c in w["text"])]
+    if len(content) < 2:
+        return [(text, 0, content[-1]["end"] if content else 50)]
+
+    total = content[-1]["end"]
+
+    # Group into phrases of 3-4 words using actual timestamps
+    phrases = []
     i = 0
-    while i < len(words):
-        n = random.choices([3, 4], weights=[0.4, 0.6])[0]
-        if i + n > len(words):
-            n = len(words) - i
-        chunks.append(" ".join(words[i:i + n]))
+    while i < len(content):
+        n = 3 if random.random() < 0.4 else 4
+        if i + n > len(content):
+            n = len(content) - i
+        group = content[i:i + n]
+        display = " ".join(w["text"] for w in group)
+        phrases.append((display, group[0]["start"], group[-1]["end"]))
         i += n
 
-    total_words = len(words)
     result = []
-    current = 0
-    for chunk in chunks:
-        wc = len(chunk.split())
-        dur = max(2.5, (wc / total_words) * total_duration)
-        if current + dur > total_duration:
-            dur = total_duration - current
-        if dur > 1.2:
-            result.append((chunk, current, dur))
-            current += dur + 0.15
+    prev_end = -1
+    for text_p, st, en in phrases:
+        if st < prev_end + 0.08:
+            st = prev_end + 0.08
+        dur = en - st
+        if dur > 0.5:
+            result.append((text_p, st, dur))
+            prev_end = st + dur
 
-    if not result:
-        result = [(text, 0, total_duration)]
-    return result
+    return result or [(text, 0, total)]
