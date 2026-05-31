@@ -68,35 +68,51 @@ def _ensure_font():
     return _FONT_CACHE
 
 def _make_word_clip(word: str, font: str, size: int, color: str):
-    return TextClip(
-        text=_reshape(word),
-        font=font,
-        font_size=size,
-        color=color,
-        stroke_color="black",
-        stroke_width=STROKE_WIDTH,
-        method="label",
-    )
+    t = _reshape(word)
+    if not t.strip():
+        return None, 0, 0
+    try:
+        clip = TextClip(
+            text=t,
+            font=font,
+            font_size=size,
+            color=color,
+            stroke_color="black",
+            stroke_width=STROKE_WIDTH,
+            method="label",
+        )
+        w, h = clip.size
+        if w < 2 or h < 2:
+            return None, 0, 0
+        return clip, w, h
+    except Exception:
+        return None, 0, 0
 
 def _render_segment(text: str, font: str, font_size: int, is_hook: bool = False):
-    words = text.split()
-    visual_words = [_reshape(w) for w in words]
+    words = [w for w in text.split() if w.strip()]
+    if not words:
+        return None, 0, 0
 
     clips = []
     total_w = 0
     max_h = 0
-    for i, vw in enumerate(visual_words):
+    for i, w in enumerate(words):
         color = "#FFD700" if i == 0 else "white"
-        c = _make_word_clip(vw, font, font_size, color)
-        cw, ch = c.size
-        clips.append((c, cw, ch))
+        clip, cw, ch = _make_word_clip(w, font, font_size, color)
+        if clip is None:
+            continue
+        clips.append((clip, cw, ch))
         total_w += cw + 10
         max_h = max(max_h, ch)
 
+    if not clips:
+        return None, 0, 0
+
     total_w -= 10
+    total_w = max(total_w, 10)
+    max_h = max(max_h, 10)
     pad = BG_PAD
 
-    # Layout: first word on the right for Arabic RTL
     cx = VIDEO_WIDTH // 2
     x = cx + total_w // 2
     layer_clips = []
@@ -105,13 +121,15 @@ def _render_segment(text: str, font: str, font_size: int, is_hook: bool = False)
         layer_clips.append(clip.with_position((int(x), 0)))
         x -= 10
 
+    bw = int(total_w + pad * 2)
+    bh = int(max_h + pad * 2)
     bg_color = (180, 140, 20) if is_hook else (0, 0, 0)
     bg_op = 0.60 if is_hook else BG_OPACITY
-    bg = ColorClip(size=(int(total_w + pad * 2), int(max_h + pad * 2)), color=bg_color)
+    bg = ColorClip(size=(bw, bh), color=bg_color)
     bg = bg.with_opacity(bg_op).with_position((int(cx - total_w / 2 - pad), 0))
 
     seg = CompositeVideoClip([bg] + layer_clips)
-    return seg, total_w + pad * 2, max_h + pad * 2
+    return seg, bw, bh
 
 def create_video(script_data: dict, footage_clips: list) -> str:
     story = script_data["story"]
@@ -159,6 +177,8 @@ def create_video(script_data: dict, footage_clips: list) -> str:
         fs = 88 if wc <= 2 else 80 if wc == 3 else 72
         is_hook = idx == 0
         seg, sw, sh = _render_segment(text, font, fs, is_hook)
+        if seg is None or sh < 2:
+            continue
         y_pos = int(SAFE_Y * VIDEO_HEIGHT - sh / 2)
         seg = seg.with_position(("center", y_pos)).with_duration(dur).with_start(start)
         layers.append(seg)
