@@ -33,10 +33,9 @@ FONT_PATHS = [
 _FONT_CACHE = None
 
 STROKE_WIDTH = 6
-BG_PAD = 35
+BG_PAD = 40
 BG_OPACITY = 0.55
 SAFE_Y = 0.42
-LINE_SPACING = 12
 
 def _reshape(text: str) -> str:
     if not _HAS_RESHAPER:
@@ -166,8 +165,9 @@ def _render_segment_pil(text: str, font_size: int, is_hook: bool = False):
     if not rendered_lines:
         return None
 
+    ls = int(font_size * 0.25)
     max_w = max(line_widths)
-    total_h = sum(line_heights) + (len(rendered_lines) - 1) * LINE_SPACING
+    total_h = sum(line_heights) + (len(rendered_lines) - 1) * ls
     pad = BG_PAD
 
     bw = int(max_w + pad * 2)
@@ -226,12 +226,15 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     layers = []
     for idx, (text, start, dur) in enumerate(segments):
         wc = len(text.split())
-        fs = 88 if wc <= 2 else 80 if wc <= 4 else 72
+        fs = 90 if wc <= 2 else 84 if wc <= 3 else 76
         seg = _render_segment_pil(text, fs, is_hook=(idx == 0))
         if seg is None:
             continue
         sh = seg.size[1]
+        y_min = int(0.08 * VIDEO_HEIGHT)
+        y_max = int(0.75 * VIDEO_HEIGHT)
         y_pos = int(SAFE_Y * VIDEO_HEIGHT - sh / 2)
+        y_pos = max(y_min, min(y_pos, y_max))
         seg = seg.with_position(("center", y_pos)).with_duration(dur).with_start(start)
         layers.append(seg)
 
@@ -269,9 +272,9 @@ def _split_words(text: str, total_duration: float) -> list:
         dur = max(2.5, (wc / total_words) * total_duration)
         if current + dur > total_duration:
             dur = total_duration - current
-        if dur > 1.0:
+        if dur > 1.2:
             result.append((chunk, current, dur))
-            current += dur
+            current += dur + 0.15
 
     if not result:
         result = [(text, 0, total_duration)]
