@@ -2,19 +2,21 @@ import os
 import re
 import random
 import urllib.request
+import numpy as np
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
 from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
-    TextClip, concatenate_videoclips, ColorClip
+    ImageClip, concatenate_videoclips, ColorClip
 )
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
-    _HAS_ARABIC_RESHAPER = True
+    _HAS_RESHAPER = True
 except ImportError:
-    _HAS_ARABIC_RESHAPER = False
+    _HAS_RESHAPER = False
 
 FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
@@ -33,10 +35,9 @@ STROKE_WIDTH = 6
 BG_PAD = 30
 BG_OPACITY = 0.50
 SAFE_Y = 0.42
-MAX_WORDS_PER_SEGMENT = 3
 
 def _reshape(text: str) -> str:
-    if not _HAS_ARABIC_RESHAPER:
+    if not _HAS_RESHAPER:
         return text
     try:
         return get_display(arabic_reshaper.reshape(text))
@@ -67,69 +68,59 @@ def _ensure_font():
     _FONT_CACHE = local if os.path.exists(local) else FONT_FALLBACK
     return _FONT_CACHE
 
-def _make_word_clip(word: str, font: str, size: int, color: str):
-    t = _reshape(word)
-    if not t.strip():
-        return None, 0, 0
-    try:
-        clip = TextClip(
-            text=t,
-            font=font,
-            font_size=size,
-            color=color,
-            stroke_color="black",
-            stroke_width=STROKE_WIDTH,
-            method="label",
-        )
-        w, h = clip.size
-        if w < 2 or h < 2:
-            return None, 0, 0
-        return clip, w, h
-    except Exception:
-        return None, 0, 0
-
-def _render_segment(text: str, font: str, font_size: int, is_hook: bool = False):
+def _render_segment_pil(text: str, font_path: str, font_size: int, is_hook: bool = False):
     words = [w for w in text.split() if w.strip()]
     if not words:
-        return None, 0, 0
+        return None
 
-    clips = []
-    total_w = 0
-    max_h = 0
-    for i, w in enumerate(words):
-        color = "#FFD700" if i == 0 else "white"
-        clip, cw, ch = _make_word_clip(w, font, font_size, color)
-        if clip is None:
-            continue
-        clips.append((clip, cw, ch))
-        total_w += cw + 10
-        max_h = max(max_h, ch)
-
-    if not clips:
-        return None, 0, 0
-
-    total_w -= 10
-    total_w = max(total_w, 10)
-    max_h = max(max_h, 10)
+    pil_font = ImageFont.truetype(font_path, font_size)
     pad = BG_PAD
 
-    cx = VIDEO_WIDTH // 2
-    x = cx + total_w // 2
-    layer_clips = []
-    for clip, cw, ch in clips:
-        x -= cw
-        layer_clips.append(clip.with_position((int(x), 0)))
-        x -= 10
+    word_sizes = []
+    for i, w in enumerate(words):
+        reshaped = _reshape(w)
+        if not reshaped.strip():
+            continue
+        color = (255, 215, 0) if i == 0 else (255, 255, 255)
+        mask = Image.new("L", (1, 1), 0)
+        draw = ImageDraw.Draw(mask)
+        bbox = draw.textbbox((0, 0), reshaped, font=pil_font, stroke_width=STROKE_WIDTH)
+        cw = bbox[2] - bbox[0]
+        ch = bbox[3] - bbox[1]
+        if cw < 2 or ch < 2:
+            continue
+        word_sizes.append((reshaped, color, cw, ch))
+
+    if not word_sizes:
+        return None
+
+    total_w = sum(s[2] for s in word_sizes) + (len(word_sizes) - 1) * 10
+    max_h = max(s[3] for s in word_sizes)
+    total_w = max(total_w, 10)
+    max_h = max(max_h, 10)
 
     bw = int(total_w + pad * 2)
     bh = int(max_h + pad * 2)
-    bg_color = (180, 140, 20) if is_hook else (0, 0, 0)
-    bg_op = 0.60 if is_hook else BG_OPACITY
-    bg = ColorClip(size=(bw, bh), color=bg_color)
-    bg = bg.with_opacity(bg_op).with_position((int(cx - total_w / 2 - pad), 0))
 
-    seg = CompositeVideoClip([bg] + layer_clips)
-    return seg, bw, bh
+    bg_color = (180, 140, 20, 153) if is_hook else (0, 0, 0, 128)
+    bg = Image.new("RGBA", (bw, bh), bg_color)
+
+    cx = bw // 2
+    x = cx + total_w // 2
+    for reshaped, color, cw, ch in word_sizes:
+        word_img = Image.new("RGBA", (cw + STROKE_WIDTH * 2, ch + STROKE_WIDTH * 2), (0, 0, 0, 0))
+        wdraw = ImageDraw.Draw(word_img)
+        wdraw.text(
+            (STROKE_WIDTH, STROKE_WIDTH), reshaped, font=pil_font,
+            fill=color + (255,),
+            stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 255),
+        )
+        x -= cw
+        paste_x = int(x + pad - (cx - total_w // 2))
+        paste_y = int((bh - ch) // 2)
+        bg.paste(word_img, (paste_x, paste_y), word_img)
+
+    return ImageClip(np.array(bg)).with_duration(1)
 
 def create_video(script_data: dict, footage_clips: list) -> str:
     story = script_data["story"]
@@ -138,24 +129,23 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     audio = AudioFileClip(audio_path)
     target = audio.duration
 
-    bg = []
+    bg_clips = []
     for c in footage_clips:
         try:
             clip = VideoFileClip(c["path"]).resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
-            bg.append(clip)
+            bg_clips.append(clip)
         except Exception:
             pass
 
-    if not bg:
-        bg = [ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)]
-        background = bg[0]
+    if not bg_clips:
+        background = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)
     else:
-        random.shuffle(bg)
+        random.shuffle(bg_clips)
         parts = []
         remaining = target
         i = 0
-        while remaining > 0.5 and bg:
-            clip = bg[i % len(bg)]
+        while remaining > 0.5 and bg_clips:
+            clip = bg_clips[i % len(bg_clips)]
             dur = min(clip.duration, remaining)
             sub = clip.subclipped(0, dur).resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
             if sub.duration < 1.0:
@@ -175,10 +165,10 @@ def create_video(script_data: dict, footage_clips: list) -> str:
     for idx, (text, start, dur) in enumerate(segments):
         wc = len(text.split())
         fs = 88 if wc <= 2 else 80 if wc == 3 else 72
-        is_hook = idx == 0
-        seg, sw, sh = _render_segment(text, font, fs, is_hook)
-        if seg is None or sh < 2:
+        seg = _render_segment_pil(text, font, fs, is_hook=(idx == 0))
+        if seg is None:
             continue
+        sh = seg.size[1]
         y_pos = int(SAFE_Y * VIDEO_HEIGHT - sh / 2)
         seg = seg.with_position(("center", y_pos)).with_duration(dur).with_start(start)
         layers.append(seg)
@@ -197,7 +187,7 @@ def create_video(script_data: dict, footage_clips: list) -> str:
 
 def _split_words(text: str, total_duration: float) -> list:
     words = text.split()
-    if len(words) <= MAX_WORDS_PER_SEGMENT:
+    if len(words) <= 3:
         return [(text, 0, total_duration)]
 
     chunks = []
