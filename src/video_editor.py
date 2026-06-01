@@ -1,6 +1,5 @@
 import os
 import re
-import random
 import urllib.request
 import numpy as np
 from datetime import datetime
@@ -14,14 +13,14 @@ from config import VIDEO_WIDTH, VIDEO_HEIGHT
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
-    _HAS_RESHAPER = True
+    _CAN_REShAPE = True
 except ImportError:
-    _HAS_RESHAPER = False
+    _CAN_REShAPE = False
 
 FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
 
-FONT_PATHS = [
+_FONT_PATHS = [
     "/usr/share/fonts/truetype/cairo/Cairo-Bold.ttf",
     "/usr/share/fonts/truetype/tajawal/Tajawal-Bold.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
@@ -30,294 +29,321 @@ FONT_PATHS = [
     "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
+
 _FONT_CACHE = None
+_TEXT_CACHE = {}
 
-STROKE_WIDTH = 6
-BG_PAD = 40
-BG_OPACITY = 0.55
-SAFE_Y = 0.42
+_STROKE = 6
+_PAD = 40
+_SAFE_Y = 0.42
+_GOLD = (255, 215, 0)
+_WHITE = (255, 255, 255)
 
-def _reshape(text: str) -> str:
-    if not _HAS_RESHAPER:
+FONT_SIZE_LARGE = 90
+FONT_SIZE_MEDIUM = 84
+FONT_SIZE_SMALL = 76
+
+EXPORT_FPS = 60
+EXPORT_BITRATE = "12000k"
+SEGMENT_GAP = 0.1
+
+# ───────────────────────── helpers ─────────────────────────
+
+def reshape(text):
+    if not _CAN_REShAPE:
         return text
     try:
         return get_display(arabic_reshaper.reshape(text), base_direction='R')
     except Exception:
         return text
 
-def _ensure_font():
+def load_font(size):
     global _FONT_CACHE
+    if _FONT_CACHE is None:
+        for p in _FONT_PATHS:
+            if os.path.exists(p):
+                _FONT_CACHE = p
+                break
+        if _FONT_CACHE is None:
+            for path, url in [
+                ("/tmp/Cairo-Bold.ttf", "https://cdn.jsdelivr.net/gh/Gue3bara/Cairo@main/fonts/Cairo-Bold.ttf"),
+                ("/tmp/NotoSansArabic-Bold.ttf", "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansArabic/googlefonts/ttf/NotoSansArabic-Bold.ttf"),
+            ]:
+                if os.path.exists(path) and os.path.getsize(path) > 1000:
+                    _FONT_CACHE = path
+                    break
+                try:
+                    urllib.request.urlretrieve(url, path)
+                    if os.path.getsize(path) > 1000:
+                        _FONT_CACHE = path
+                        break
+                except Exception:
+                    continue
     if _FONT_CACHE:
-        return _FONT_CACHE
-    for p in FONT_PATHS:
-        if os.path.exists(p):
-            _FONT_CACHE = p
-            return p
-    candidates = [
-        ("/tmp/Cairo-Bold.ttf", "https://cdn.jsdelivr.net/gh/Gue3bara/Cairo@main/fonts/Cairo-Bold.ttf"),
-        ("/tmp/NotoSansArabic-Bold.ttf", "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansArabic/googlefonts/ttf/NotoSansArabic-Bold.ttf"),
-    ]
-    for local_path, url in candidates:
-        if os.path.exists(local_path) and os.path.getsize(local_path) > 1000:
-            _FONT_CACHE = local_path
-            return _FONT_CACHE
         try:
-            urllib.request.urlretrieve(url, local_path)
-            if os.path.getsize(local_path) > 1000:
-                _FONT_CACHE = local_path
-                return _FONT_CACHE
-        except Exception:
-            continue
-    _FONT_CACHE = None
-    return None
-
-def _load_font(size: int):
-    path = _ensure_font()
-    if path:
-        try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(_FONT_CACHE, size)
         except Exception:
             pass
     return ImageFont.load_default()
 
-def _measure(text: str, font):
+def text_bbox(text, font):
     m = Image.new("L", (1, 1), 0)
     d = ImageDraw.Draw(m)
-    b = d.textbbox((0, 0), text, font=font, stroke_width=STROKE_WIDTH)
+    b = d.textbbox((0, 0), text, font=font, stroke_width=_STROKE)
     return b[2] - b[0], b[3] - b[1], b[0], b[1]
 
-def _wrap_lines(words):
+# ───────────────────────── text rendering ─────────────────────────
+
+def wrap_lines(words):
     n = len(words)
     if n <= 2:
         return [words]
     if n == 3:
-        # Prefer 2+1 over 1+2 for better balance
         return [words[:2], words[2:]]
     if n == 4:
         return [words[:2], words[2:]]
-    if n == 5:
-        return [words[:3], words[3:]]
     half = (n + 1) // 2
     return [words[:half], words[half:]]
 
-def _render_line(line_words, font, fs, make_first_gold):
-    reshaped = []
-    offsets = []
-    total_w = 0
-    max_h = 0
-    for i, w in enumerate(line_words):
-        r = _reshape(w)
-        if not r.strip():
-            continue
-        cw, ch, ox, oy = _measure(r, font)
-        if cw < 4 or ch < 4:
-            continue
-        color = (255, 215, 0) if (i == 0 and make_first_gold) else (255, 255, 255)
-        reshaped.append((r, color, cw, ch, ox, oy))
-        total_w += cw + 10
-        max_h = max(max_h, ch)
+def render_word(text, color, font, font_size):
+    key = (text, color, font_size)
+    if key in _TEXT_CACHE:
+        return _TEXT_CACHE[key]
 
-    if not reshaped:
+    r = reshape(text)
+    if not r.strip():
+        _TEXT_CACHE[key] = (None, 0, 0)
+        return None, 0, 0
+    cw, ch, ox, oy = text_bbox(r, font)
+    if cw < 4 or ch < 4:
+        _TEXT_CACHE[key] = (None, 0, 0)
         return None, 0, 0
 
-    total_w -= 10
-    total_w = max(total_w, 10)
-    max_h = max(max_h, 10)
+    iw = int(cw + _STROKE * 5)
+    ih = int(ch + _STROKE * 5)
+    img = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
 
-    line_img = Image.new("RGBA", (int(total_w + STROKE_WIDTH * 6), int(max_h + STROKE_WIDTH * 6)), (0, 0, 0, 0))
-    li_w = total_w + STROKE_WIDTH * 6
-    li_h = max_h + STROKE_WIDTH * 6
+    sh = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(sh)
+    sd.text(
+        (_STROKE * 2 - ox + 3, _STROKE * 2 - oy + 3),
+        r, font=font, fill=(0, 0, 0, 60),
+        stroke_width=_STROKE, stroke_fill=(0, 0, 0, 60),
+    )
+    img = Image.alpha_composite(img, sh)
 
-    x = li_w // 2 + total_w // 2
-    for r_text, color, cw, ch, ox, oy in reshaped:
-        iw = int(cw + STROKE_WIDTH * 4)
-        ih = int(ch + STROKE_WIDTH * 4)
-        word_img = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
-        so = 3
-        sh = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
-        sd = ImageDraw.Draw(sh)
-        sd.text(
-            (STROKE_WIDTH * 2 - ox + so, STROKE_WIDTH * 2 - oy + so),
-            r_text, font=font, fill=(0, 0, 0, 80),
-            stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 80),
-        )
-        word_img = Image.alpha_composite(word_img, sh)
-        wd = ImageDraw.Draw(word_img)
-        wd.text(
-            (STROKE_WIDTH * 2 - ox, STROKE_WIDTH * 2 - oy),
-            r_text, font=font, fill=color + (255,),
-            stroke_width=STROKE_WIDTH, stroke_fill=(0, 0, 0, 255),
-        )
+    wd = ImageDraw.Draw(img)
+    wd.text(
+        (_STROKE * 2 - ox, _STROKE * 2 - oy),
+        r, font=font, fill=color + (255,),
+        stroke_width=_STROKE, stroke_fill=(0, 0, 0, 255),
+    )
+
+    _TEXT_CACHE[key] = (img, cw, ch)
+    return img, cw, ch
+
+def render_line(words, font, first_gold, font_size):
+    items = []
+    tw = 0
+    mh = 0
+    for i, w in enumerate(words):
+        c = _GOLD if (i == 0 and first_gold) else _WHITE
+        img, cw, ch = render_word(w, c, font, font_size)
+        if img is None:
+            continue
+        items.append((img, cw, ch))
+        tw += cw + 10
+        mh = max(mh, ch)
+    if not items:
+        return None, 0, 0
+
+    tw -= 10
+    tw = max(tw, 10)
+    mh = max(mh, 10)
+
+    lw = int(tw + _STROKE * 6)
+    lh = int(mh + _STROKE * 6)
+    line = Image.new("RGBA", (lw, lh), (0, 0, 0, 0))
+
+    x = lw // 2 + tw // 2
+    for img, cw, ch in items:
         x -= cw
-        px = int(x + STROKE_WIDTH * 2 - (li_w // 2 - total_w // 2))
-        py = int((li_h - ch) // 2 - oy)
-        line_img.paste(word_img, (px, py), word_img)
+        px = int(x + _STROKE * 2 - (lw // 2 - tw // 2))
+        py = int((lh - ch) // 2)
+        line.paste(img, (px, py), img)
+    return line, lw, lh
 
-    return line_img, li_w, li_h
-
-def _render_segment_pil(text: str, font_size: int, is_hook: bool = False):
+def render_block(text, font_size, is_hook):
     words = [w for w in text.split() if w.strip()]
     if not words:
         return None
 
-    font = _load_font(font_size)
-    lines = _wrap_lines(words)
+    font = load_font(font_size)
+    lines = wrap_lines(words)
 
-    rendered_lines = []
-    line_widths = []
-    line_heights = []
+    images = []
+    for i, ln in enumerate(lines):
+        img, w, h = render_line(ln, font, first_gold=(i == 0), font_size=font_size)
+        if img is not None:
+            images.append((img, w, h))
 
-    for li, lw in enumerate(lines):
-        img, w, h = _render_line(lw, font, font_size, make_first_gold=(li == 0))
-        if img is None:
-            continue
-        rendered_lines.append(img)
-        line_widths.append(w)
-        line_heights.append(h)
-
-    if not rendered_lines:
+    if not images:
         return None
 
     ls = int(font_size * 0.25)
-    max_w = max(line_widths)
-    total_h = sum(line_heights) + (len(rendered_lines) - 1) * ls
-    pad = BG_PAD
+    mw = max(w for _, w, _ in images)
+    th = sum(h for _, _, h in images) + (len(images) - 1) * ls
 
-    bw = int(max_w + pad * 2)
-    bh = int(total_h + pad * 2)
+    bw = int(mw + _PAD * 2)
+    bh = int(th + _PAD * 2)
 
     bg = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
-    bg_draw = ImageDraw.Draw(bg)
-    bg_color = (180, 140, 20, 160) if is_hook else (0, 0, 0, 140)
-    bg_draw.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=14, fill=bg_color)
+    bgd = ImageDraw.Draw(bg)
+    if is_hook:
+        bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=14, fill=(180, 140, 20, 160))
+    else:
+        bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=14, fill=(0, 0, 0, 140))
 
-    cy = (bh - total_h) // 2
-    for i, (img, w, h) in enumerate(zip(rendered_lines, line_widths, line_heights)):
+    cy = (bh - th) // 2
+    for img, w, h in images:
         cx = (bw - w) // 2
         bg.paste(img, (cx, cy), img)
         cy += h + ls
 
     return ImageClip(np.array(bg)).with_duration(1)
 
-def create_video(script_data: dict, footage_clips: list) -> str:
+# ───────────────────────── sync: edge-tts word timestamps ─────────────────────────
+
+def _split_phrases(text):
+    parts = re.split(r'[،\.!\?؟—:;\n]+', text)
+    parts = [p.strip() for p in parts if p.strip()]
+    out = []
+    for part in parts:
+        words = part.split()
+        if not words:
+            continue
+        if len(words) <= 4:
+            out.append(" ".join(words))
+        else:
+            for i in range(0, len(words), 3):
+                chunk = words[i:i+3]
+                if chunk:
+                    out.append(" ".join(chunk))
+    return out
+
+def _ratio_mapping(text, tw):
+    """Map each original word to edge-tts timing by position ratio."""
+    words = text.split()
+    n = len(words)
+    m = len(tw)
+    if n < 2 or m < 2:
+        return []
+    times = []
+    for i, w in enumerate(words):
+        idx = int(i / n * m)
+        idx = max(0, min(idx, m - 1))
+        times.append((w, tw[idx]["start"], tw[idx]["end"]))
+    return times
+
+def build_segments(text, word_timings, total_dur):
+    tw = [
+        w for w in (word_timings or [])
+        if w.get("text", "").strip() and any(c.isalpha() for c in w["text"])
+    ]
+    use_tts = len(tw) >= 3
+
+    phrases = _split_phrases(text)
+    if not phrases:
+        return [(text, 0, max(total_dur, 1))]
+
+    if use_tts:
+        mapped = _ratio_mapping(text, tw)
+    else:
+        mapped = []
+
+    segs = []
+    orig_idx = 0
+    for phrase in phrases:
+        pw = phrase.split()
+        n = len(pw)
+        if n == 0:
+            continue
+        if mapped:
+            st = mapped[orig_idx][1]
+            en = mapped[min(orig_idx + n - 1, len(mapped) - 1)][2]
+        else:
+            st = (orig_idx / len(text.split())) * total_dur
+            en = ((orig_idx + n) / len(text.split())) * total_dur
+        dur = en - st
+        if dur > 0.3:
+            segs.append((phrase, st, dur))
+        orig_idx += n
+
+    last_end = 0
+    out = []
+    for txt, st, dur in segs:
+        st = max(st, last_end + SEGMENT_GAP)
+        if st + dur > total_dur:
+            dur = total_dur - st
+        if dur > 0.3:
+            out.append((txt, st, dur))
+            last_end = st + dur
+    return out or [(text, 0, total_dur)]
+
+# ───────────────────────── main montage ─────────────────────────
+
+def create_video(script_data, footage_clips):
     story = script_data["story"]
-    audio_path = script_data["audio_file"]
+    audio = AudioFileClip(script_data["audio_file"])
+    total = audio.duration
 
-    audio = AudioFileClip(audio_path)
-    target = audio.duration
-
-    bg_clips = []
+    parts = []
     for c in footage_clips:
         try:
             clip = VideoFileClip(c["path"]).resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
-            bg_clips.append(clip)
+            parts.append(clip)
         except Exception:
             pass
 
-    if not bg_clips:
-        background = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)
+    if not parts:
+        bg = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
     else:
-        random.shuffle(bg_clips)
-        parts = []
-        remaining = target
+        random.shuffle(parts)
+        clips = []
+        remain = total
         i = 0
-        while remaining > 0.5 and bg_clips:
-            clip = bg_clips[i % len(bg_clips)]
-            dur = min(clip.duration, remaining)
+        while remain > 0.5 and parts:
+            clip = parts[i % len(parts)]
+            dur = min(clip.duration, remain)
             sub = clip.subclipped(0, dur).resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
             if sub.duration < 1.0:
                 i += 1
                 continue
-            parts.append(sub)
-            remaining -= dur
+            clips.append(sub)
+            remain -= dur
             i += 1
-        if not parts:
-            parts = [ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(target)]
-        background = concatenate_videoclips(parts, method="compose")
+        bg = concatenate_videoclips(clips, method="compose") if clips else \
+            ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
 
-    word_timings = script_data.get("word_timings", [])
-    segments = _build_timed_segments(story, word_timings)
-    layers = []
-    for idx, (text, start, dur) in enumerate(segments):
-        wc = len(text.split())
-        fs = 90 if wc <= 2 else 84 if wc <= 3 else 76
-        seg = _render_segment_pil(text, fs, is_hook=(idx == 0))
-        if seg is None:
+    segments = build_segments(story, script_data.get("word_timings", []), total)
+    overlays = []
+    for idx, (txt, start, dur) in enumerate(segments):
+        wc = len(txt.split())
+        fs = FONT_SIZE_LARGE if wc <= 2 else FONT_SIZE_MEDIUM if wc == 3 else FONT_SIZE_SMALL
+        clip = render_block(txt, fs, is_hook=(idx == 0))
+        if clip is None:
             continue
-        sh = seg.size[1]
-        y_min = int(0.08 * VIDEO_HEIGHT)
-        y_max = int(0.75 * VIDEO_HEIGHT)
-        y_pos = int(SAFE_Y * VIDEO_HEIGHT - sh / 2)
-        y_pos = max(y_min, min(y_pos, y_max))
-        seg = seg.with_position(("center", y_pos)).with_duration(dur).with_start(start)
-        layers.append(seg)
+        sh = clip.size[1]
+        y = int(_SAFE_Y * VIDEO_HEIGHT - sh / 2)
+        y = max(int(0.08 * VIDEO_HEIGHT), min(y, int(0.75 * VIDEO_HEIGHT)))
+        overlays.append(clip.with_position(("center", y)).with_duration(dur).with_start(start))
 
-    final = CompositeVideoClip([background] + layers, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
-    final = final.with_audio(audio).with_duration(target)
-
+    final = CompositeVideoClip([bg] + overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
+    final = final.with_audio(audio).with_duration(total)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
-    final.write_videofile(out, fps=30, codec="libx264", audio_codec="aac", threads=2, preset="medium", logger=None)
+    final.write_videofile(out, fps=EXPORT_FPS, codec="libx264", audio_codec="aac", bitrate=EXPORT_BITRATE, threads=4, preset="slow", logger=None)
     audio.close()
     final.close()
-
     script_data["video_file"] = out
     return out
-
-def _build_timed_segments(text: str, word_timings: list) -> list:
-    """Build segments using actual word-level timestamps from edge-tts."""
-    if not word_timings:
-        total_dur = 50
-        words = text.split()
-        if len(words) <= 4:
-            return [(text, 0, total_dur)]
-        chunks = []
-        i = 0
-        while i < len(words):
-            n = random.choices([3, 4], weights=[0.4, 0.6])[0]
-            if i + n > len(words):
-                n = len(words) - i
-            chunks.append(" ".join(words[i:i + n]))
-            i += n
-        result = []
-        cur = 0
-        for c in chunks:
-            wc = len(c.split())
-            d = max(2.5, (wc / len(words)) * total_dur)
-            if cur + d > total_dur:
-                d = total_dur - cur
-            if d > 1.2:
-                result.append((c, cur, d))
-                cur += d + 0.15
-        return result or [(text, 0, total_dur)]
-
-    # Filter to content words only
-    content = [w for w in word_timings if w["text"].strip() and any(c.isalpha() for c in w["text"])]
-    if len(content) < 2:
-        return [(text, 0, content[-1]["end"] if content else 50)]
-
-    total = content[-1]["end"]
-
-    # Group into phrases of 3-4 words using actual timestamps
-    phrases = []
-    i = 0
-    while i < len(content):
-        n = 3 if random.random() < 0.4 else 4
-        if i + n > len(content):
-            n = len(content) - i
-        group = content[i:i + n]
-        display = " ".join(w["text"] for w in group)
-        phrases.append((display, group[0]["start"], group[-1]["end"]))
-        i += n
-
-    result = []
-    prev_end = -1
-    for text_p, st, en in phrases:
-        if st < prev_end + 0.08:
-            st = prev_end + 0.08
-        dur = en - st
-        if dur > 0.5:
-            result.append((text_p, st, dur))
-            prev_end = st + dur
-
-    return result or [(text, 0, total)]
