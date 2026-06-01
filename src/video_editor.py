@@ -294,6 +294,7 @@ def build_segments(text, word_timings, total_dur):
 # ───────────────────────── main montage ─────────────────────────
 
 def create_video(script_data, footage_clips):
+    import random
     story = script_data["story"]
     audio = AudioFileClip(script_data["audio_file"])
     total = audio.duration
