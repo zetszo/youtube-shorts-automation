@@ -232,53 +232,25 @@ def _split_phrases(text):
                     out.append(" ".join(chunk))
     return out
 
-def _ratio_mapping(text, tw):
-    """Map each original word to edge-tts timing by position ratio."""
-    words = text.split()
-    n = len(words)
-    m = len(tw)
-    if n < 2 or m < 2:
-        return []
-    times = []
-    for i, w in enumerate(words):
-        idx = int(i / n * m)
-        idx = max(0, min(idx, m - 1))
-        times.append((w, tw[idx]["start"], tw[idx]["end"]))
-    return times
-
 def build_segments(text, word_timings, total_dur):
-    tw = [
-        w for w in (word_timings or [])
-        if w.get("text", "").strip() and any(c.isalpha() for c in w["text"])
-    ]
-    use_tts = len(tw) >= 3
-
     phrases = _split_phrases(text)
     if not phrases:
-        return [(text, 0, max(total_dur, 1))]
+        return [(text, 0, total_dur)]
 
-    if use_tts:
-        mapped = _ratio_mapping(text, tw)
-    else:
-        mapped = []
+    total = sum(len(p.split()) for p in phrases)
+    if total == 0:
+        return [(text, 0, total_dur)]
 
     segs = []
-    orig_idx = 0
+    acc = 0
     for phrase in phrases:
-        pw = phrase.split()
-        n = len(pw)
-        if n == 0:
-            continue
-        if mapped:
-            st = mapped[orig_idx][1]
-            en = mapped[min(orig_idx + n - 1, len(mapped) - 1)][2]
-        else:
-            st = (orig_idx / len(text.split())) * total_dur
-            en = ((orig_idx + n) / len(text.split())) * total_dur
-        dur = en - st
+        n = len(phrase.split())
+        start = (acc / total) * total_dur
+        end = ((acc + n) / total) * total_dur
+        dur = end - start
         if dur > 0.3:
-            segs.append((phrase, st, dur))
-        orig_idx += n
+            segs.append((phrase, start, dur))
+        acc += n
 
     last_end = 0
     out = []
