@@ -269,7 +269,7 @@ def create_video(script_data, footage_clips):
     import random
     story = script_data["story"]
     audio = AudioFileClip(script_data["audio_file"])
-    total = audio.duration
+    total = min(audio.duration, 60)
 
     parts = []
     for c in footage_clips:
