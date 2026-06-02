@@ -44,8 +44,8 @@ FONT_SIZE_LARGE = 90
 FONT_SIZE_MEDIUM = 84
 FONT_SIZE_SMALL = 76
 
-EXPORT_FPS = 60
-EXPORT_BITRATE = "12000k"
+EXPORT_FPS = 30
+EXPORT_BITRATE = "8000k"
 SEGMENT_GAP = 0.1
 
 # ───────────────────────── helpers ─────────────────────────
@@ -316,7 +316,7 @@ def create_video(script_data, footage_clips):
     final = final.with_audio(audio).with_duration(total)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
-    final.write_videofile(out, fps=EXPORT_FPS, codec="libx264", audio_codec="aac", bitrate=EXPORT_BITRATE, threads=4, preset="slow", logger=None)
+    final.write_videofile(out, fps=EXPORT_FPS, codec="libx264", audio_codec="aac", bitrate=EXPORT_BITRATE, threads=2, preset="medium", logger=None)
     audio.close()
     final.close()
     script_data["video_file"] = out
