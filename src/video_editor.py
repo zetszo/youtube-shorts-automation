@@ -32,22 +32,19 @@ _FONT_PATHS = [
 ]
 
 _FONT_CACHE = None
-_TEXT_CACHE = {}
+_WORD_CACHE = {}
 
+_FONT_SIZE = 86
 _STROKE = 6
-_PAD = 40
-_SAFE_Y = 0.42
+_PAD = 30
 _GOLD = (255, 215, 0)
 _WHITE = (255, 255, 255)
-
-FONT_SIZE_LARGE = 90
-FONT_SIZE_MEDIUM = 84
-FONT_SIZE_SMALL = 76
+_SEG_GAP = 0.08
 
 EXPORT_FPS = 30
 EXPORT_BITRATE = "8000k"
 
-# ───────────────────────── helpers ─────────────────────────
+# ───────── helpers ─────────
 
 def reshape(text):
     if not _CAN_REShAPE:
@@ -92,32 +89,18 @@ def text_bbox(text, font):
     b = d.textbbox((0, 0), text, font=font, stroke_width=_STROKE)
     return b[2] - b[0], b[3] - b[1], b[0], b[1]
 
-# ───────────────────────── text rendering ─────────────────────────
+def clean_diac(text):
+    return re.sub(r'[ًٌٍَُِّْ]', '', text)
 
-def wrap_lines(words):
-    n = len(words)
-    if n <= 2:
-        return [words]
-    if n == 3:
-        return [words[:2], words[2:]]
-    if n == 4:
-        return [words[:2], words[2:]]
-    half = (n + 1) // 2
-    return [words[:half], words[half:]]
+# ───────── word rendering ─────────
 
-def render_word(text, color, font, font_size):
-    key = (text, color, font_size)
-    if key in _TEXT_CACHE:
-        return _TEXT_CACHE[key]
-
+def render_word_img(text, color, font):
     r = reshape(text)
     if not r.strip():
-        _TEXT_CACHE[key] = (None, 0, 0)
-        return None, 0, 0
+        return None
     cw, ch, ox, oy = text_bbox(r, font)
     if cw < 4 or ch < 4:
-        _TEXT_CACHE[key] = (None, 0, 0)
-        return None, 0, 0
+        return None
 
     iw = int(cw + _STROKE * 5)
     ih = int(ch + _STROKE * 5)
@@ -138,147 +121,153 @@ def render_word(text, color, font, font_size):
         r, font=font, fill=color + (255,),
         stroke_width=_STROKE, stroke_fill=(0, 0, 0, 255),
     )
+    return img
 
-    _TEXT_CACHE[key] = (img, cw, ch)
-    return img, cw, ch
+def get_word_img(word, color):
+    key = (word, color)
+    if key in _WORD_CACHE:
+        return _WORD_CACHE[key]
+    font = load_font(_FONT_SIZE)
+    img = render_word_img(word, color, font)
+    _WORD_CACHE[key] = img
+    return img
 
-def render_line(words, font, first_gold, font_size):
-    items = []
-    tw = 0
-    mh = 0
-    for i, w in enumerate(words):
-        c = _GOLD if (i == 0 and first_gold) else _WHITE
-        img, cw, ch = render_word(w, c, font, font_size)
+# ───────── layout: position words in a subtitle block ─────────
+
+def measure_word(word):
+    img = get_word_img(word, _WHITE)
+    if img is None:
+        return 0, 0
+    return img.width, img.height
+
+def layout_segment(words):
+    """Return list of (word, x, y, w, h) positioned RTL, wrapping to 2 lines max."""
+    gap = 12
+    max_w = int(VIDEO_WIDTH * 0.85)
+    line_h = 0
+    positions = []
+
+    cx = max_w
+    cy = 0
+    for w in reversed(words):
+        iw, ih = measure_word(w)
+        if iw <= 0:
+            positions.append((w, 0, 0, 0, 0))
+            continue
+        if cx - gap - iw < 0:
+            cx = max_w
+            cy += line_h + int(_FONT_SIZE * 0.3)
+            line_h = 0
+        cx -= iw
+        positions.append((w, cx, cy, iw, ih))
+        cx -= gap
+        line_h = max(line_h, ih)
+
+    return [(w, x, abs(y)) for w, x, y, iw, ih in positions]
+
+# ───────── render subtitle state ─────────
+
+def render_subtitle(words, active_idx):
+    font = load_font(_FONT_SIZE)
+    pos = layout_segment(words)
+    if not pos:
+        return None
+
+    box_w = max(x + w for _, x, _, w in pos) + _PAD * 2
+    box_h = max(y + h for _, _, y, _, h in pos) + _PAD * 2
+    box_w = max(box_w, 60)
+    box_h = max(box_h, 60)
+
+    bg = Image.new("RGBA", (int(box_w), int(box_h)), (0, 0, 0, 0))
+    bgd = ImageDraw.Draw(bg)
+    bgd.rounded_rectangle([(0, 0), (box_w - 1, box_h - 1)], radius=16, fill=(0, 0, 0, 140))
+
+    for i, (w, x, y, _, _) in enumerate(pos):
+        if i > active_idx:
+            continue
+        color = _GOLD if i == active_idx else _WHITE
+        img = get_word_img(w, color)
         if img is None:
             continue
-        items.append((img, cw, ch))
-        tw += cw + 10
-        mh = max(mh, ch)
-    if not items:
-        return None, 0, 0
+        px = int(x + _PAD - box_w // 2 + VIDEO_WIDTH * 0.425)
+        py = int(y + _PAD)
+        bg.paste(img, (px, py), img)
 
-    tw -= 10
-    tw = max(tw, 10)
-    mh = max(mh, 10)
+    return bg
 
-    lw = int(tw + _STROKE * 6)
-    lh = int(mh + _STROKE * 6)
-    line = Image.new("RGBA", (lw, lh), (0, 0, 0, 0))
+# ───────── build word timestamps ─────────
 
-    x = lw // 2 + tw // 2
-    for img, cw, ch in items:
-        x -= cw
-        px = int(x + _STROKE * 2 - (lw // 2 - tw // 2))
-        py = int((lh - ch) // 2)
-        line.paste(img, (px, py), img)
-    return line, lw, lh
-
-def render_block(text, font_size, is_hook):
-    words = [w for w in text.split() if w.strip()]
-    if not words:
-        return None
-
-    font = load_font(font_size)
-    lines = wrap_lines(words)
-
-    images = []
-    for i, ln in enumerate(lines):
-        img, w, h = render_line(ln, font, first_gold=(i == 0), font_size=font_size)
-        if img is not None:
-            images.append((img, w, h))
-
-    if not images:
-        return None
-
-    ls = int(font_size * 0.25)
-    mw = max(w for _, w, _ in images)
-    th = sum(h for _, _, h in images) + (len(images) - 1) * ls
-
-    bw = int(mw + _PAD * 2)
-    bh = int(th + _PAD * 2)
-
-    bg = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
-    bgd = ImageDraw.Draw(bg)
-    if is_hook:
-        bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=14, fill=(180, 140, 20, 160))
-    else:
-        bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=14, fill=(0, 0, 0, 140))
-
-    cy = (bh - th) // 2
-    for img, w, h in images:
-        cx = (bw - w) // 2
-        bg.paste(img, (cx, cy), img)
-        cy += h + ls
-
-    return ImageClip(np.array(bg)).with_duration(1)
-
-# ───────────────────────── sync: exact word-level from edge-tts ─────────────────────────
-
-def _clean_diac(text):
-    return re.sub(r'[ًٌٍَُِّْ]', '', text)
-
-def _split_phrases(text):
-    parts = re.split(r'[،\.!\?؟—:;\n]+', text)
-    parts = [p.strip() for p in parts if p.strip()]
-    out = []
-    for part in parts:
-        words = part.split()
-        if not words:
-            continue
-        if len(words) <= 5:
-            out.append(" ".join(words))
-        else:
-            for i in range(0, len(words), 4):
-                chunk = words[i:i+4]
-                if chunk:
-                    out.append(" ".join(chunk))
-    return out
-
-def build_segments(text, word_timings, total_dur):
+def build_word_timestamps(text, word_timings):
     tw = [w for w in (word_timings or []) if w["text"].strip() and any(c.isalpha() for c in w["text"])]
-
-    if tw and len(tw) >= 3:
-        groups = []
-        i = 0
-        while i < len(tw):
-            n = min(4, len(tw) - i)
-            g = tw[i:i+n]
-            display = " ".join(_clean_diac(w["text"]) for w in g)
-            groups.append((display, g[0]["start"], g[-1]["end"]))
-            i += n
-
-        out = []
-        for i, (txt, st, en) in enumerate(groups):
-            if i < len(groups) - 1:
-                dur = groups[i+1][1] - st
-            else:
-                dur = total_dur - st
-            if dur > 0.2:
-                out.append((txt, st, dur))
-        return out
-
-    # Fallback: proportional from original text
-    phrases = _split_phrases(text)
-    if not phrases:
-        return [(text, 0, total_dur)]
-    total = sum(len(p.split()) for p in phrases)
-    if total == 0:
-        return [(text, 0, total_dur)]
+    if not tw:
+        return []
     out = []
-    acc = 0
-    for i, phrase in enumerate(phrases):
-        n = len(phrase.split())
-        st = (acc / total) * total_dur
-        if i < len(phrases) - 1:
-            dur = ((acc + n) / total) * total_dur - st
-        else:
-            dur = total_dur - st
-        if dur > 0.2:
-            out.append((phrase, st, dur))
-        acc += n
+    for w in tw:
+        cleaned = clean_diac(w["text"])
+        if cleaned:
+            out.append({"word": cleaned, "start": w["start"], "end": w["end"]})
     return out
 
-# ───────────────────────── main montage ─────────────────────────
+def group_segments(timestamps):
+    """Group word timestamps into segments of 4-6 words at natural breaks."""
+    if not timestamps:
+        return []
+    segs = []
+    i = 0
+    while i < len(timestamps):
+        n = min(random.randint(4, 6), len(timestamps) - i)
+        group = timestamps[i:i+n]
+        segs.append({
+            "words": [t["word"] for t in group],
+            "times": [(t["start"], t["end"]) for t in group],
+            "start": group[0]["start"],
+            "end": group[-1]["end"],
+        })
+        i += n
+    return segs
+
+# ───────── build clips for one segment ─────────
+
+def build_segment_clips(seg, total_dur):
+    words = seg["words"]
+    times = seg["times"]
+    clips = []
+
+    for i in range(len(words)):
+        st = times[i][0]
+        if i < len(words) - 1:
+            dur = times[i + 1][0] - st
+        else:
+            dur = seg["end"] - st
+        if dur < 0.08:
+            continue
+
+        img = render_subtitle(words, active_idx=i)
+        if img is None:
+            continue
+        bw, bh = img.size
+        y = int(0.42 * VIDEO_HEIGHT - bh / 2)
+        y = max(int(0.08 * VIDEO_HEIGHT), min(y, int(0.75 * VIDEO_HEIGHT)))
+
+        clip = ImageClip(np.array(img)).with_duration(dur).with_start(st)
+        clip = clip.with_position(("center", y))
+        clips.append(clip)
+
+    # final state: all words white
+    final_st = times[-1][1] if times else seg["end"]
+    final_dur = max(total_dur - final_st, 0.2)
+    img = render_subtitle(words, active_idx=len(words))
+    if img is not None:
+        bw, bh = img.size
+        y = int(0.42 * VIDEO_HEIGHT - bh / 2)
+        y = max(int(0.08 * VIDEO_HEIGHT), min(y, int(0.75 * VIDEO_HEIGHT)))
+        clip = ImageClip(np.array(img)).with_duration(final_dur).with_start(final_st)
+        clip = clip.with_position(("center", y))
+        clips.append(clip)
+
+    return clips
+
+# ───────── main ─────────
 
 def create_video(script_data, footage_clips):
     import random
@@ -314,18 +303,14 @@ def create_video(script_data, footage_clips):
         bg = concatenate_videoclips(clips, method="compose") if clips else \
             ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
 
-    segments = build_segments(story, script_data.get("word_timings", []), total)
-    overlays = []
-    for idx, (txt, start, dur) in enumerate(segments):
-        wc = len(txt.split())
-        fs = FONT_SIZE_LARGE if wc <= 2 else FONT_SIZE_MEDIUM if wc == 3 else FONT_SIZE_SMALL
-        clip = render_block(txt, fs, is_hook=(idx == 0))
-        if clip is None:
-            continue
-        sh = clip.size[1]
-        y = int(_SAFE_Y * VIDEO_HEIGHT - sh / 2)
-        y = max(int(0.08 * VIDEO_HEIGHT), min(y, int(0.75 * VIDEO_HEIGHT)))
-        overlays.append(clip.with_position(("center", y)).with_duration(dur).with_start(start))
+    timestamps = build_word_timestamps(story, script_data.get("word_timings", []))
+    if timestamps:
+        segs = group_segments(timestamps)
+        overlays = []
+        for seg in segs:
+            overlays.extend(build_segment_clips(seg, total))
+    else:
+        overlays = []
 
     final = CompositeVideoClip([bg] + overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
     final = final.with_audio(audio).with_duration(total)
