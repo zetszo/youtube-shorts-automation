@@ -134,53 +134,63 @@ def get_word_img(word, color):
 
 # ───────── layout: position words in a subtitle block ─────────
 
-def measure_word(word):
-    img = get_word_img(word, _WHITE)
-    if img is None:
+def word_dims(word):
+    font = load_font(_FONT_SIZE)
+    r = reshape(word)
+    if not r.strip():
         return 0, 0
-    return img.width, img.height
+    cw, ch, _, _ = text_bbox(r, font)
+    return cw + _STROKE * 4, ch + _STROKE * 4
 
 def layout_segment(words):
-    """Return list of (word, x, y, w, h) positioned RTL, wrapping to 2 lines max."""
-    gap = 12
-    max_w = int(VIDEO_WIDTH * 0.85)
-    line_h = 0
-    positions = []
+    """Return list of (word, x, y, iw, ih) where x,y are relative to text block (RTL)."""
+    gap = 14
+    max_w = int(VIDEO_WIDTH * 0.82)
 
-    cx = max_w
-    cy = 0
-    for w in reversed(words):
-        iw, ih = measure_word(w)
-        if iw <= 0:
-            positions.append((w, 0, 0, 0, 0))
+    measured = [(w, *word_dims(w)) for w in words]
+    total_w = sum(m[1] for m in measured) + gap * (len(measured) - 1)
+    line_h = max((m[2] for m in measured), default=0)
+
+    if total_w <= max_w:
+        x = total_w
+        out = []
+        for w, iw, ih in measured:
+            x -= iw
+            out.append((w, x, 0, iw, ih))
+            x -= gap
+        return out
+
+    half = max(len(words) // 2, 1)
+    ls = int(_FONT_SIZE * 0.3)
+    out = []
+    for row, start in enumerate([0, half]):
+        line = measured[start:start + half]
+        if not line:
             continue
-        if cx - gap - iw < 0:
-            cx = max_w
-            cy += line_h + int(_FONT_SIZE * 0.3)
-            line_h = 0
-        cx -= iw
-        positions.append((w, cx, cy, iw, ih))
-        cx -= gap
-        line_h = max(line_h, ih)
-
-    return [(w, x, abs(y)) for w, x, y, iw, ih in positions]
+        tw = sum(m[1] for m in line) + gap * (len(line) - 1)
+        x = tw
+        for w, iw, ih in line:
+            x -= iw
+            out.append((w, x, row * (line_h + ls), iw, ih))
+            x -= gap
+    return out
 
 # ───────── render subtitle state ─────────
 
 def render_subtitle(words, active_idx):
-    font = load_font(_FONT_SIZE)
     pos = layout_segment(words)
     if not pos:
         return None
 
-    box_w = max(x + w for _, x, _, w in pos) + _PAD * 2
-    box_h = max(y + h for _, _, y, _, h in pos) + _PAD * 2
-    box_w = max(box_w, 60)
-    box_h = max(box_h, 60)
+    min_x = min(x for _, x, _, _, _ in pos)
+    bw = int(max(x + w for _, x, _, w, _ in pos) - min_x + _PAD * 2)
+    bh = int(max(y + h for _, _, y, _, h in pos) + _PAD * 2)
+    bw = max(bw, 40)
+    bh = max(bh, 40)
 
-    bg = Image.new("RGBA", (int(box_w), int(box_h)), (0, 0, 0, 0))
+    bg = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
     bgd = ImageDraw.Draw(bg)
-    bgd.rounded_rectangle([(0, 0), (box_w - 1, box_h - 1)], radius=16, fill=(0, 0, 0, 140))
+    bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=16, fill=(0, 0, 0, 140))
 
     for i, (w, x, y, _, _) in enumerate(pos):
         if i > active_idx:
@@ -189,7 +199,7 @@ def render_subtitle(words, active_idx):
         img = get_word_img(w, color)
         if img is None:
             continue
-        px = int(x + _PAD - box_w // 2 + VIDEO_WIDTH * 0.425)
+        px = int(x - min_x + _PAD)
         py = int(y + _PAD)
         bg.paste(img, (px, py), img)
 
