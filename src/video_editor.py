@@ -11,6 +11,7 @@ from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
     ImageClip, concatenate_videoclips, ColorClip
 )
+from moviepy.video.fx import Resize
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
 try:
@@ -27,18 +28,18 @@ EXPORT_FPS = 30
 EXPORT_BITRATE = "8000k"
 
 # ─── visual ───
-FONT_SIZE = 250
-STROKE_W = 14
-PAD_X = 55
-PAD_Y = 45
-WORD_GAP = 22
+FONT_SIZE = 260
+STROKE_W = 18
+PAD_X = 60
+PAD_Y = 50
+WORD_GAP = 24
 LINE_SPACE = int(FONT_SIZE * 0.25)
-BG_ALPHA = 155
-RADIUS = 30
-MAX_W = int(VIDEO_WIDTH * 0.92)
+BG_ALPHA = 160
+RADIUS = 32
+MAX_W = int(VIDEO_WIDTH * 0.90)
 CENTER_Y = int(VIDEO_HEIGHT * 0.48)
 GROUP_MIN = 2
-GROUP_MAX = 4
+GROUP_MAX = 3
 
 _GOLD = (255, 215, 0)
 _WHITE = (255, 255, 255)
@@ -191,19 +192,21 @@ def _layout(words):
             x -= WORD_GAP
     return out
 
-# ─── render subtitle on full frame ───
+# ─── render subtitle box and full frame ───
 
-def render_frame(words, active_idx):
-    """Render subtitle directly onto full 1080x1920 canvas at exact center."""
+def render_box(words, active_idx):
+    """Return (bg_image, screen_x, screen_y) — tight box at screen position."""
     pos = _layout(words)
     if not pos:
-        return None
+        return None, 0, 0
     min_x = min(x for _, x, _, _, _ in pos)
     max_x = max(x + w for _, x, _, w, _ in pos)
     max_y = max(y + h for _, _, y, _, h in pos)
     bw = int(max_x - min_x + PAD_X * 2)
     bh = int(max_y + PAD_Y * 2)
-    bg = Image.new("RGBA", (max(bw, 40), max(bh, 40)), (0, 0, 0, 0))
+    if bw < 40 or bh < 40:
+        return None, 0, 0
+    bg = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
     bgd = ImageDraw.Draw(bg)
     bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=RADIUS, fill=(0, 0, 0, BG_ALPHA))
     painted = 0
@@ -219,12 +222,18 @@ def render_frame(words, active_idx):
         bg.paste(img, (px, py), img)
         painted += 1
     if painted == 0:
+        return None, 0, 0
+    sx = (VIDEO_WIDTH - bw) // 2
+    sy = CENTER_Y - bh // 2
+    return bg, sx, sy
+
+def render_frame(words, active_idx):
+    """Full 1080x1920 canvas with subtitle at exact center."""
+    box, sx, sy = render_box(words, active_idx)
+    if box is None:
         return None
-    # Place on full canvas
     canvas = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
-    cx = (VIDEO_WIDTH - bw) // 2
-    cy = CENTER_Y - bh // 2
-    canvas.paste(bg, (cx, cy), bg)
+    canvas.paste(box, (sx, sy), box)
     return canvas
 
 # ─── timestamp pipeline ───
@@ -267,15 +276,19 @@ def build_segment_clips(seg, total_dur):
         dur = (times[i + 1][0] - st) if i < len(words) - 1 else (seg["end"] - st)
         if dur < 0.1:
             continue
-        img = render_frame(words, i)
-        if img is None:
+        box, sx, sy = render_box(words, i)
+        if box is None:
             continue
-        clips.append(ImageClip(np.array(img)).with_duration(dur).with_start(st).with_position((0, 0)))
+        clip = ImageClip(np.array(box)).with_duration(dur).with_start(st).with_position((sx, sy))
+        def pop(t):
+            return 1.12 - 0.12 * min(t / 0.2, 1.0)
+        clip = Resize(pop)(clip)
+        clips.append(clip)
     final_st = times[-1][1] if times else seg["end"]
     final_dur = max(total_dur - final_st, 0.2)
-    img = render_frame(words, active_idx=len(words))
-    if img is not None:
-        clips.append(ImageClip(np.array(img)).with_duration(final_dur).with_start(final_st).with_position((0, 0)))
+    box, sx, sy = render_box(words, active_idx=len(words))
+    if box is not None:
+        clips.append(ImageClip(np.array(box)).with_duration(final_dur).with_start(final_st).with_position((sx, sy)))
     return clips
 
 # ─── main ───
@@ -330,7 +343,8 @@ def create_video(script_data, footage_clips):
     else:
         log("WARNING: zero overlays")
 
-    final = CompositeVideoClip([bg] + overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
+    dark = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(total).with_opacity(0.3)
+    final = CompositeVideoClip([bg, dark] + overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
     final = final.with_audio(audio).with_duration(total)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
