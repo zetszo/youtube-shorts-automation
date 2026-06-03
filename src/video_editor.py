@@ -8,10 +8,9 @@ import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import (
-    VideoFileClip, AudioFileClip, CompositeVideoClip,
-    ImageClip, concatenate_videoclips, ColorClip
+    VideoFileClip, AudioFileClip,
+    concatenate_videoclips, ColorClip
 )
-from moviepy.video.fx import Resize
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
 try:
@@ -295,10 +294,9 @@ def build_segment_clips(seg, total_dur):
 
 def create_video(script_data, footage_clips):
     import random
-    story = script_data["story"]
     audio = AudioFileClip(script_data["audio_file"])
     total = min(audio.duration, 60)
-    log(f"audio: {audio.duration:.1f}s | {len(story.split())} words | font={FONT_SIZE}px")
+    log(f"audio: {audio.duration:.1f}s")
 
     parts = []
     for c in footage_clips:
@@ -308,7 +306,7 @@ def create_video(script_data, footage_clips):
         except Exception as e:
             log(f"footage skip: {e}")
     if not parts:
-        bg = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
+        final = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
     else:
         random.shuffle(parts)
         clips = []
@@ -324,27 +322,9 @@ def create_video(script_data, footage_clips):
             clips.append(sub)
             remain -= dur
             i += 1
-        bg = concatenate_videoclips(clips, method="compose") if clips else ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
+        final = concatenate_videoclips(clips, method="compose") if clips else \
+            ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
 
-    timestamps = build_word_timestamps(story, script_data.get("word_timings", []))
-    log(f"timestamps: {len(timestamps)}")
-    overlays = []
-    if timestamps:
-        segs = group_segments(timestamps)
-        log(f"segments: {len(segs)}")
-        for seg in segs:
-            overlays.extend(build_segment_clips(seg, total))
-    else:
-        log("NO TIMESTAMPS")
-
-    # Verify at least one overlay has content
-    if overlays:
-        log(f"total overlay clips: {len(overlays)}")
-    else:
-        log("WARNING: zero overlays")
-
-    dark = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0)).with_duration(total).with_opacity(0.3)
-    final = CompositeVideoClip([bg, dark] + overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
     final = final.with_audio(audio).with_duration(total)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
