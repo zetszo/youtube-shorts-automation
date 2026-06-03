@@ -46,7 +46,6 @@ FONT_SIZE_SMALL = 76
 
 EXPORT_FPS = 30
 EXPORT_BITRATE = "8000k"
-SEGMENT_GAP = 0.1
 
 # ───────────────────────── helpers ─────────────────────────
 
@@ -223,16 +222,17 @@ def _split_phrases(text):
         words = part.split()
         if not words:
             continue
-        if len(words) <= 4:
+        if len(words) <= 5:
             out.append(" ".join(words))
         else:
-            for i in range(0, len(words), 3):
-                chunk = words[i:i+3]
+            for i in range(0, len(words), 4):
+                chunk = words[i:i+4]
                 if chunk:
                     out.append(" ".join(chunk))
     return out
 
 def build_segments(text, word_timings, total_dur):
+    """Build segments that appear exactly when spoken and stay until the next segment."""
     phrases = _split_phrases(text)
     if not phrases:
         return [(text, 0, total_dur)]
@@ -241,27 +241,23 @@ def build_segments(text, word_timings, total_dur):
     if total == 0:
         return [(text, 0, total_dur)]
 
-    segs = []
+    starts = []
     acc = 0
     for phrase in phrases:
         n = len(phrase.split())
-        start = (acc / total) * total_dur
-        end = ((acc + n) / total) * total_dur
-        dur = end - start
-        if dur > 0.3:
-            segs.append((phrase, start, dur))
+        starts.append((acc / total) * total_dur)
         acc += n
 
-    last_end = 0
     out = []
-    for txt, st, dur in segs:
-        st = max(st, last_end + SEGMENT_GAP)
-        if st + dur > total_dur:
+    for i, phrase in enumerate(phrases):
+        st = starts[i]
+        if i < len(phrases) - 1:
+            dur = starts[i + 1] - st
+        else:
             dur = total_dur - st
-        if dur > 0.3:
-            out.append((txt, st, dur))
-            last_end = st + dur
-    return out or [(text, 0, total_dur)]
+        if dur > 0.2:
+            out.append((phrase, st, dur))
+    return out
 
 # ───────────────────────── main montage ─────────────────────────
 
