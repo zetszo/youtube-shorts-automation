@@ -4,13 +4,15 @@ import sys
 import subprocess
 import tempfile
 import urllib.request
+import random
 import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import (
-    VideoFileClip, AudioFileClip,
-    concatenate_videoclips, ColorClip
+    VideoFileClip, AudioFileClip, CompositeVideoClip,
+    ImageClip, concatenate_videoclips, ColorClip
 )
+from moviepy.video.fx import Resize
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
 
 try:
@@ -27,16 +29,17 @@ EXPORT_FPS = 30
 EXPORT_BITRATE = "8000k"
 
 # ─── visual ───
-FONT_SIZE = 260
-STROKE_W = 18
-PAD_X = 60
-PAD_Y = 50
-WORD_GAP = 24
-LINE_SPACE = int(FONT_SIZE * 0.25)
+FONT_SIZE = 200
+POP_SIZE = FONT_SIZE + 12
+STROKE_W = 8
+PAD_X = 80
+PAD_Y = 60
+WORD_GAP = 32
+LINE_GAP = int(FONT_SIZE * 0.35)
 BG_ALPHA = 160
-RADIUS = 32
-MAX_W = int(VIDEO_WIDTH * 0.90)
-CENTER_Y = int(VIDEO_HEIGHT * 0.48)
+RADIUS = 36
+MAX_W = int(VIDEO_WIDTH * 0.88)
+CENTER_Y = int(VIDEO_HEIGHT * 0.50)
 GROUP_MIN = 2
 GROUP_MAX = 3
 
@@ -44,7 +47,7 @@ _GOLD = (255, 215, 0)
 _WHITE = (255, 255, 255)
 
 _WORD_CACHE = {}
-_FONT_CACHE = None
+_FONT_CACHE = {}
 
 FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/cairo/Cairo-Bold.ttf",
@@ -97,16 +100,18 @@ def _find_font():
     log("NO ARABIC FONT!")
     return None
 
-def get_font():
-    global _FONT_CACHE
-    if _FONT_CACHE is None:
-        _FONT_CACHE = _find_font()
-    if _FONT_CACHE:
-        try:
-            return ImageFont.truetype(_FONT_CACHE, FONT_SIZE)
-        except Exception as e:
-            log(f"font load error: {e}")
-    return ImageFont.load_default()
+def _get_font(size):
+    if size not in _FONT_CACHE:
+        path = _find_font()
+        if path:
+            try:
+                _FONT_CACHE[size] = ImageFont.truetype(path, size)
+            except Exception as e:
+                log(f"font load error: {e}")
+                _FONT_CACHE[size] = ImageFont.load_default()
+        else:
+            _FONT_CACHE[size] = ImageFont.load_default()
+    return _FONT_CACHE[size]
 
 # ─── text shaping ───
 
@@ -123,84 +128,94 @@ def clean_diac(text):
 
 # ─── measure ───
 
-def _measure(r):
-    font = get_font()
+def _measure(r, font_size):
+    font = _get_font(font_size)
     m = Image.new("L", (1, 1), 0)
     d = ImageDraw.Draw(m)
-    bb = d.textbbox((0, 0), r, font=font, stroke_width=STROKE_W)
+    sw = int(STROKE_W * font_size / FONT_SIZE)
+    bb = d.textbbox((0, 0), r, font=font, stroke_width=sw)
     return bb[2] - bb[0], bb[3] - bb[1], bb[0], bb[1]
 
 # ─── word rendering ───
 
-def _render_word(text, color):
-    key = (text, color)
+def _render_word(text, color, font_size):
+    key = (text, color, font_size)
     if key in _WORD_CACHE:
         return _WORD_CACHE[key]
     r = reshape(text)
     if not r.strip():
         _WORD_CACHE[key] = None
         return None
-    cw, ch, ox, oy = _measure(r)
+    sw = int(STROKE_W * font_size / FONT_SIZE)
+    cw, ch, ox, oy = _measure(r, font_size)
     if cw < 4 or ch < 4:
         _WORD_CACHE[key] = None
         return None
-    iw = int(cw + STROKE_W * 6)
-    ih = int(ch + STROKE_W * 6)
+    pad = sw * 3
+    iw = int(cw + pad * 2)
+    ih = int(ch + pad * 2)
     img = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
-    sh = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(sh)
-    sd.text((STROKE_W * 2 - ox + 4, STROKE_W * 2 - oy + 4), r, font=get_font(), fill=(0, 0, 0, 70), stroke_width=STROKE_W, stroke_fill=(0, 0, 0, 70))
-    img = Image.alpha_composite(img, sh)
-    wd = ImageDraw.Draw(img)
-    wd.text((STROKE_W * 2 - ox, STROKE_W * 2 - oy), r, font=get_font(), fill=color + (255,), stroke_width=STROKE_W, stroke_fill=(0, 0, 0, 255))
+    bg = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(bg)
+    bd.text((pad - ox + 2, pad - oy + 2), r, font=_get_font(font_size),
+            fill=(0, 0, 0, 60), stroke_width=sw, stroke_fill=(0, 0, 0, 60))
+    img = Image.alpha_composite(img, bg)
+    fd = ImageDraw.Draw(img)
+    fd.text((pad - ox, pad - oy), r, font=_get_font(font_size),
+            fill=color + (255,), stroke_width=sw, stroke_fill=(0, 0, 0, 220))
     _WORD_CACHE[key] = img
     return img
 
-# ─── layout ───
+# ─── layout (word-wrap within MAX_W) ───
 
-def _layout(words):
+def _layout(words, active_idx):
+    font_size = FONT_SIZE
     items = []
-    for w in words:
+    for i, w in enumerate(words):
+        sz = POP_SIZE if i == active_idx else font_size
         r = reshape(w)
         if not r.strip():
-            items.append((w, 0, 0))
+            items.append((w, 0, 0, sz))
             continue
-        cw, ch, _, _ = _measure(r)
-        items.append((w, cw + STROKE_W * 4, ch + STROKE_W * 4))
-    total_w = sum(it[1] for it in items) + WORD_GAP * (len(items) - 1)
-    line_h = max((it[2] for it in items), default=0)
-    if total_w <= MAX_W:
-        x = total_w
-        out = []
-        for w, iw, ih in items:
-            x -= iw
-            out.append((w, x, 0, iw, ih))
-            x -= WORD_GAP
-        return out
-    half = max(len(words) // 2, 1)
+        cw, ch, _, _ = _measure(r, sz)
+        pw = cw + int(STROKE_W * sz / font_size) * 4
+        ph = ch + int(STROKE_W * sz / font_size) * 4
+        items.append((w, pw, ph, sz))
+    max_h = max((it[2] for it in items), default=0)
+    lines = []
+    cur = []
+    cur_w = 0
+    for it in items:
+        gap = WORD_GAP if cur else 0
+        need = it[1] + gap
+        if cur and cur_w + need > MAX_W:
+            lines.append(cur)
+            cur = [it]
+            cur_w = it[1]
+        else:
+            cur.append(it)
+            cur_w += need
+    if cur:
+        lines.append(cur)
     out = []
-    for row, start in enumerate([0, half]):
-        line = items[start:start + half]
-        if not line:
-            continue
-        tw = sum(it[1] for it in line) + WORD_GAP * (len(line) - 1)
-        x = tw
-        for w, iw, ih in line:
-            x -= iw
-            out.append((w, x, row * (line_h + LINE_SPACE), iw, ih))
+    for row, line in enumerate(lines):
+        lw = sum(it[1] for it in line) + WORD_GAP * (len(line) - 1)
+        x = lw
+        for w, pw, ph, sz in line:
+            x -= pw
+            out.append((w, x, row * (max_h + LINE_GAP), pw, ph, sz))
             x -= WORD_GAP
     return out
 
-# ─── render subtitle box and full frame ───
+# ─── render subtitle box ───
 
 def render_box(words, active_idx):
-    """Return (bg_image, screen_x, screen_y) — tight box at screen position."""
-    pos = _layout(words)
+    pos = _layout(words, active_idx)
     if not pos:
         return None, 0, 0
-    min_x = min(x for _, x, _, _, _ in pos)
-    max_x = max(x + w for _, x, _, w, _ in pos)
-    max_y = max(y + h for _, _, y, _, h in pos)
+    min_x = min(x for _, x, _, _, _, _ in pos)
+    max_x = max(x + w for _, x, _, w, _, _ in pos)
+    max_y = max(y + h for _, _, y, _, h, _ in pos)
     bw = int(max_x - min_x + PAD_X * 2)
     bh = int(max_y + PAD_Y * 2)
     if bw < 40 or bh < 40:
@@ -209,11 +224,11 @@ def render_box(words, active_idx):
     bgd = ImageDraw.Draw(bg)
     bgd.rounded_rectangle([(0, 0), (bw - 1, bh - 1)], radius=RADIUS, fill=(0, 0, 0, BG_ALPHA))
     painted = 0
-    for i, (w, x, y, _, _) in enumerate(pos):
+    for i, (w, x, y, _, _, sz) in enumerate(pos):
         if i > active_idx:
             continue
         color = _GOLD if i == active_idx else _WHITE
-        img = _render_word(w, color)
+        img = _render_word(w, color, sz)
         if img is None:
             continue
         px = int(x - min_x + PAD_X)
@@ -226,19 +241,11 @@ def render_box(words, active_idx):
     sy = CENTER_Y - bh // 2
     return bg, sx, sy
 
-def render_frame(words, active_idx):
-    """Full 1080x1920 canvas with subtitle at exact center."""
-    box, sx, sy = render_box(words, active_idx)
-    if box is None:
-        return None
-    canvas = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
-    canvas.paste(box, (sx, sy), box)
-    return canvas
-
 # ─── timestamp pipeline ───
 
 def build_word_timestamps(text, word_timings):
-    tw = [w for w in (word_timings or []) if w["text"].strip() and any(c.isalpha() for c in w["text"])]
+    tw = [w for w in (word_timings or [])
+          if w["text"].strip() and any(c.isalpha() for c in w["text"])]
     if not tw:
         return []
     out = []
@@ -251,12 +258,11 @@ def build_word_timestamps(text, word_timings):
 def group_segments(timestamps):
     if not timestamps:
         return []
-    import random
     segs = []
     i = 0
     while i < len(timestamps):
         n = min(random.randint(GROUP_MIN, GROUP_MAX), len(timestamps) - i)
-        group = timestamps[i:i+n]
+        group = timestamps[i:i + n]
         segs.append({
             "words": [t["word"] for t in group],
             "times": [(t["start"], t["end"]) for t in group],
@@ -272,31 +278,39 @@ def build_segment_clips(seg, total_dur):
     clips = []
     for i in range(len(words)):
         st = times[i][0]
-        dur = (times[i + 1][0] - st) if i < len(words) - 1 else (seg["end"] - st)
-        if dur < 0.1:
+        if i < len(words) - 1:
+            end = times[i + 1][0]
+        else:
+            end = times[i][1]
+        if end <= st:
             continue
         box, sx, sy = render_box(words, i)
         if box is None:
             continue
-        clip = ImageClip(np.array(box)).with_duration(dur).with_start(st).with_position((sx, sy))
-        def pop(t):
-            return 1.12 - 0.12 * min(t / 0.2, 1.0)
-        clip = Resize(pop)(clip)
+        clip = ImageClip(np.array(box)).with_duration(end - st).with_start(st).with_position((sx, sy))
         clips.append(clip)
-    final_st = times[-1][1] if times else seg["end"]
-    final_dur = max(total_dur - final_st, 0.2)
-    box, sx, sy = render_box(words, active_idx=len(words))
-    if box is not None:
-        clips.append(ImageClip(np.array(box)).with_duration(final_dur).with_start(final_st).with_position((sx, sy)))
+    final_st = times[-1][1]
+    final_dur = max(seg["end"] - final_st, 0)
+    if final_dur > 0.1:
+        box, sx, sy = render_box(words, len(words))
+        if box is not None:
+            clips.append(ImageClip(np.array(box)).with_duration(final_dur).with_start(final_st).with_position((sx, sy)))
     return clips
+
+# ─── dark overlay ───
+
+def _make_dark(total_dur):
+    return (ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0))
+            .with_duration(total_dur)
+            .with_opacity(0.30))
 
 # ─── main ───
 
 def create_video(script_data, footage_clips):
-    import random
+    story = script_data["story"]
     audio = AudioFileClip(script_data["audio_file"])
     total = min(audio.duration, 60)
-    log(f"audio: {audio.duration:.1f}s")
+    log(f"audio: {audio.duration:.1f}s | story: {len(story.split())} words | font={FONT_SIZE}px")
 
     parts = []
     for c in footage_clips:
@@ -305,8 +319,9 @@ def create_video(script_data, footage_clips):
             parts.append(clip)
         except Exception as e:
             log(f"footage skip: {e}")
+
     if not parts:
-        final = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
+        bg = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
     else:
         random.shuffle(parts)
         clips = []
@@ -322,14 +337,30 @@ def create_video(script_data, footage_clips):
             clips.append(sub)
             remain -= dur
             i += 1
-        final = concatenate_videoclips(clips, method="compose") if clips else \
+        bg = concatenate_videoclips(clips, method="compose") if clips else \
             ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)
 
+    timestamps = build_word_timestamps(story, script_data.get("word_timings", []))
+    log(f"timestamps: {len(timestamps)}")
+
+    overlays = [_make_dark(total)]
+    if timestamps:
+        segs = group_segments(timestamps)
+        log(f"segments: {len(segs)}")
+        for seg in segs:
+            overlays.extend(build_segment_clips(seg, total))
+    else:
+        log("NO TIMESTAMPS — no subtitles")
+
+    log(f"total overlay clips: {len(overlays)}")
+
+    final = CompositeVideoClip([bg] + overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
     final = final.with_audio(audio).with_duration(total)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
     log(f"rendering {out}")
-    final.write_videofile(out, fps=EXPORT_FPS, codec="libx264", audio_codec="aac", bitrate=EXPORT_BITRATE, threads=2, preset="medium", logger=None)
+    final.write_videofile(out, fps=EXPORT_FPS, codec="libx264", audio_codec="aac",
+                          bitrate=EXPORT_BITRATE, threads=2, preset="medium", logger=None)
     audio.close()
     final.close()
     script_data["video_file"] = out

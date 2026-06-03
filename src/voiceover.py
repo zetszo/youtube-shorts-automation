@@ -14,7 +14,7 @@ def generate_voiceover(script_data: dict) -> str:
     path = os.path.join(AUDIO_DIR, f"audio_{ts}_ar.mp3")
 
     async def _run():
-        communicate = edge_tts.Communicate(text, TTS_VOICE, rate=TTS_RATE)
+        communicate = edge_tts.Communicate(text, TTS_VOICE, rate=TTS_RATE, boundary="WordBoundary")
         words = []
         with open(path, "wb") as f:
             async for chunk in communicate.stream():
