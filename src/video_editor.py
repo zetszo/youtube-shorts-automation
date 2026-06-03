@@ -212,7 +212,10 @@ def render_block(text, font_size, is_hook):
 
     return ImageClip(np.array(bg)).with_duration(1)
 
-# ───────────────────────── sync: edge-tts word timestamps ─────────────────────────
+# ───────────────────────── sync: exact word-level from edge-tts ─────────────────────────
+
+def _clean_diac(text):
+    return re.sub(r'[ًٌٍَُِّْ]', '', text)
 
 def _split_phrases(text):
     parts = re.split(r'[،\.!\?؟—:;\n]+', text)
@@ -232,31 +235,47 @@ def _split_phrases(text):
     return out
 
 def build_segments(text, word_timings, total_dur):
-    """Build segments that appear exactly when spoken and stay until the next segment."""
+    tw = [w for w in (word_timings or []) if w["text"].strip() and any(c.isalpha() for c in w["text"])]
+
+    if tw and len(tw) >= 3:
+        groups = []
+        i = 0
+        while i < len(tw):
+            n = min(4, len(tw) - i)
+            g = tw[i:i+n]
+            display = " ".join(_clean_diac(w["text"]) for w in g)
+            groups.append((display, g[0]["start"], g[-1]["end"]))
+            i += n
+
+        out = []
+        for i, (txt, st, en) in enumerate(groups):
+            if i < len(groups) - 1:
+                dur = groups[i+1][1] - st
+            else:
+                dur = total_dur - st
+            if dur > 0.2:
+                out.append((txt, st, dur))
+        return out
+
+    # Fallback: proportional from original text
     phrases = _split_phrases(text)
     if not phrases:
         return [(text, 0, total_dur)]
-
     total = sum(len(p.split()) for p in phrases)
     if total == 0:
         return [(text, 0, total_dur)]
-
-    starts = []
-    acc = 0
-    for phrase in phrases:
-        n = len(phrase.split())
-        starts.append((acc / total) * total_dur)
-        acc += n
-
     out = []
+    acc = 0
     for i, phrase in enumerate(phrases):
-        st = starts[i]
+        n = len(phrase.split())
+        st = (acc / total) * total_dur
         if i < len(phrases) - 1:
-            dur = starts[i + 1] - st
+            dur = ((acc + n) / total) * total_dur - st
         else:
             dur = total_dur - st
         if dur > 0.2:
             out.append((phrase, st, dur))
+        acc += n
     return out
 
 # ───────────────────────── main montage ─────────────────────────
