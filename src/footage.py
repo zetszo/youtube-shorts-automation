@@ -8,42 +8,40 @@ from config import PEXELS_API_KEY
 FOOTAGE_DIR = "output/footage"
 os.makedirs(FOOTAGE_DIR, exist_ok=True)
 
-# أولويات البحث: طبيعة + عمارة إسلامية + رجال فقط إن لزم
 SAFE_QUERIES = [
-    "desert landscape sand dunes",
-    "mountain landscape nature",
-    "sunset golden hour sky",
-    "stars night sky moon",
-    "ocean sea waves nature",
-    "palm trees oasis desert",
-    "ancient mosque architecture",
-    "old city arabian architecture",
-    "historical mid eastern building",
-    "man walking traditional robe",
-    "men traditional middle eastern",
-    "camel desert caravan",
-    "horse arabian desert",
-    "clouds dramatic sky cinematic",
-    "sunrise over desert landscape",
-    "sand dunes golden light",
-    "ancient ruins middle eastern",
-    "arabian desert nature",
-    "bird flying sky freedom",
-    "valley mountain landscape",
+    "desert landscape sand dunes golden hour",
+    "sunrise over arabian desert nature",
+    "starry night desert sky moon",
+    "ancient mosque architecture old city",
+    "camel caravan desert sunset",
+    "arabian horse galloping desert dust",
+    "palm trees oasis desert landscape",
+    "rocky desert mountains dramatic sky",
+    "sunset golden light sand dunes",
+    "old arabian city ancient architecture",
+    "minaret mosque silhouette sunset",
+    "cave entrance rocky mountain desert",
+    "clouds dramatic sky cinematic desert",
+    "medina old city historical architecture",
+    "sand storm desert dust dramatic",
+    "volumetric light rays mosque interior",
+    "crescent moon night sky stars",
+    "arabian peninsula desert landscape",
+    "ancient ruins stone columns sunset",
+    "calligraphy islamic art manuscript",
+    "desert camp tent traditional nomadic",
+    "mountain valley sunrise golden hour",
+    "sea coast mediterranean sunset",
+    "candle flame light darkness",
 ]
 
 def _add_context(kw: str) -> list:
-    """توليد كلمات بحث متعددة مع سياق إسلامي محتشم"""
     base = kw.strip().lower()
     results = []
-    # البحث الأساسي
     results.append(base)
-    # مع سياق تاريخي
-    results.append(f"{base} historical ancient")
-    # مع طبيعة
-    results.append(f"{base} desert landscape nature")
-    # مع رجال (بدون نساء)
-    if any(w in base for w in ["person", "people", "human", "man", "woman", "walk", "stand"]):
+    results.append(f"{base} historical ancient arabian")
+    results.append(f"{base} desert landscape cinematic")
+    if any(w in base for w in ["person", "people", "human", "man", "walk", "stand"]):
         results.append(base.replace("woman", "man").replace("people", "men").replace("person", "man"))
     return results
 
@@ -109,13 +107,11 @@ def download_footage(script_data: dict, max_clips: int = 15) -> list:
 
     search_queries = []
 
-    # 1. كلمات من السكربت + سياق إسلامي/تاريخي
     for kw in keywords[:6]:
         for variant in _add_context(kw):
             search_queries.append(("script", variant))
 
-    # 2. كلمات آمنة مضمونة (طبيعة، عمارة، الخ)
-    safe_sample = random.sample(SAFE_QUERIES, min(6, len(SAFE_QUERIES)))
+    safe_sample = random.sample(SAFE_QUERIES, min(8, len(SAFE_QUERIES)))
     for sq in safe_sample:
         search_queries.append(("safe", sq))
 
@@ -139,7 +135,6 @@ def download_footage(script_data: dict, max_clips: int = 15) -> list:
             seen.add(c["id"])
             unique.append(c)
 
-    # ترتيب: safe queries أولاً (مضمونة)، ثم script queries
     ordered = [c for c in unique if c["qtype"] == "safe"]
     ordered += [c for c in unique if c["qtype"] == "script" and c not in ordered]
     ordered = ordered[:max_clips]
