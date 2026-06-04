@@ -309,7 +309,7 @@ def _make_dark(total_dur):
 def create_video(script_data, footage_clips):
     story = script_data["story"]
     audio = AudioFileClip(script_data["audio_file"])
-    total = min(audio.duration, 60)
+    total = audio.duration
     log(f"audio: {audio.duration:.1f}s | story: {len(story.split())} words | font={FONT_SIZE}px")
 
     parts = []

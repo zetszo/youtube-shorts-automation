@@ -49,7 +49,7 @@ def _search_pexels(query: str) -> list:
     results = []
     params = {
         "query": query,
-        "per_page": 8,
+        "per_page": 12,
         "orientation": "portrait",
         "size": "medium",
         "min_duration": 4,
@@ -102,12 +102,12 @@ def _download_video(item: dict) -> dict:
     except Exception:
         return None
 
-def download_footage(script_data: dict, max_clips: int = 15) -> list:
+def download_footage(script_data: dict, max_clips: int = 25) -> list:
     keywords = script_data.get("keywords", [])
 
     search_queries = []
 
-    for kw in keywords[:6]:
+    for kw in keywords[:10]:
         for variant in _add_context(kw):
             search_queries.append(("script", variant))
 

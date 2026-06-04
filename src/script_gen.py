@@ -23,7 +23,7 @@ def _groq_complete(prompt: str, retries: int = 5) -> str:
                 "model": GROQ_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
-                "max_tokens": 1024,
+                "max_tokens": 2048,
             },
             timeout=60,
         )
@@ -74,7 +74,7 @@ def generate_script(language: str = "ar") -> dict:
     prompt = (
         f"\u0627\u0643\u062a\u0628 \u0642\u0635\u0629 \u0642\u0635\u064a\u0631\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0627\u0644\u0641\u0635\u062d\u0649 \u0639\u0646: {topic}\n\n"
         "\u0627\u0644\u0645\u062a\u0637\u0644\u0628\u0627\u062a:\n"
-        "- \u0627\u0644\u0645\u062f\u0629: 45-55 \u062b\u0627\u0646\u064a\u0629 \u0639\u0646\u062f \u0627\u0644\u0642\u0631\u0627\u0621\u0629 (150-200 \u0643\u0644\u0645\u0629)\n"
+        "- \u0627\u0644\u0645\u062f\u0629: 90-120 \u062b\u0627\u0646\u064a\u0629 \u0639\u0646\u062f \u0627\u0644\u0642\u0631\u0627\u0621\u0629 (250-350 \u0643\u0644\u0645\u0629)\n"
         "- \u0627\u0628\u062f\u0623 \u0628\u0645\u0642\u062f\u0645\u0629 \u062a\u0634\u062f \u0627\u0644\u0627\u0646\u062a\u0628\u0627\u0647 \u0648\u062a\u0635\u0641 \u0627\u0644\u0645\u0634\u0647\u062f\n"
         "- \u0627\u0644\u062a\u0632\u0645 \u0628\u0627\u0644\u0631\u0648\u0627\u064a\u0629 \u0627\u0644\u0625\u0633\u0644\u0627\u0645\u064a\u0629 \u0627\u0644\u0635\u062d\u064a\u062d\u0629\n"
         "- \u0627\u0633\u062a\u062e\u062f\u0645 \u0623\u0644\u0641\u0627\u0638\u0627\u064b \u0648\u0635\u0641\u064a\u0629 \u062a\u0646\u0627\u0633\u0628 \u0639\u0635\u0631 \u0627\u0644\u0635\u062d\u0627\u0628\u0629 \u0648\u0627\u0644\u0623\u0646\u0628\u064a\u0627\u0621: \u0627\u0644\u0635\u062d\u0631\u0627\u0621\u060c \u0627\u0644\u0631\u0645\u0627\u0644\u060c \u0627\u0644\u062c\u0645\u0627\u0644\u060c \u0627\u0644\u062e\u064a\u0644\u060c \u0627\u0644\u0633\u064a\u0648\u0641\u060c \u0627\u0644\u0646\u062e\u064a\u0644\u060c \u0627\u0644\u0628\u062d\u0631\u060c \u0627\u0644\u062c\u0628\u0627\u0644\u060c \u0627\u0644\u0645\u0633\u0627\u062c\u062f\u060c \u0627\u0644\u0642\u0645\u0631\u060c \u0627\u0644\u0646\u062c\u0648\u0645\u060c \u0627\u0644\u0641\u062c\u0631\u060c \u0627\u0644\u063a\u0631\u0648\u0628\n"
@@ -103,7 +103,7 @@ def generate_script(language: str = "ar") -> dict:
         "AVOID: women, modern buildings, cities, cars, technology, people closeups.\n"
         "Each keyword: 2-4 English words, nature/historical focused.\n"
         f"Story:\n{story}\n"
-        "7 comma-separated keywords:"
+        "10 comma-separated keywords:"
     )
     keywords_raw = _groq_complete(scene_prompt)
     keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]
@@ -123,7 +123,7 @@ def generate_script(language: str = "ar") -> dict:
         "topic_id": idx,
         "topic": topic,
         "story": story,
-        "keywords": keywords[:7],
+        "keywords": keywords[:10],
         "cine_keywords": cine_keywords[:6],
     }
 
