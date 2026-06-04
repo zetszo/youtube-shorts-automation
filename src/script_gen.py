@@ -11,8 +11,14 @@ SCRIPTS_DIR = "output/scripts"
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 
+_RATE_LIMIT_WAIT = 0
+
 def _groq_complete(prompt: str, retries: int = 5) -> str:
+    global _RATE_LIMIT_WAIT
     for attempt in range(retries):
+        if _RATE_LIMIT_WAIT > 0:
+            print(f"  \u23f3 \u0627\u0646\u062a\u0638\u0627\u0631 {_RATE_LIMIT_WAIT}\u062b \u0644\u0644\u062a\u0623\u0643\u064a\u062f \u0645\u0646 \u0627\u0644\u062d\u062f")
+            time.sleep(_RATE_LIMIT_WAIT)
         resp = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -28,11 +34,17 @@ def _groq_complete(prompt: str, retries: int = 5) -> str:
             timeout=60,
         )
         if resp.status_code == 429:
-            wait = 2 ** attempt
-            print(f"  \u23f3 Groq rate limit, \u0627\u0646\u062a\u0638\u0627\u0631 {wait}\u062b ({attempt+1}/{retries})")
+            retry_after = resp.headers.get("Retry-After")
+            if retry_after:
+                wait = int(retry_after)
+            else:
+                wait = min(5 * (2 ** attempt), 60)
+            _RATE_LIMIT_WAIT = min(wait + 5, 60)
+            print(f"  \u23f3 Groq \u062d\u062f \u0627\u0644\u0627\u0633\u062a\u062e\u062f\u0627\u0645\u060c \u0627\u0646\u062a\u0638\u0627\u0631 {wait}\u062b ({attempt+1}/{retries})")
             time.sleep(wait)
             continue
         resp.raise_for_status()
+        _RATE_LIMIT_WAIT = 0
         return resp.json()["choices"][0]["message"]["content"].strip()
     resp.raise_for_status()
 
@@ -82,42 +94,68 @@ def generate_script(language: str = "ar") -> dict:
         "- \u062e\u0627\u062a\u0645\u0629 \u0642\u0648\u064a\u0629 \u0648\u062d\u0643\u0645\u0629 \u0645\u0633\u062a\u0641\u0627\u062f\u0629\n"
         "- \u0623\u0633\u0644\u0648\u0628 \u0633\u0631\u062f\u064a \u0623\u062f\u0628\u064a \u062c\u0630\u0627\u0628 \u0628\u0623\u0644\u0641\u0627\u0638 \u0641\u0635\u064a\u062d\u0629\n"
         "- \u0630\u0643\u0631 \u0627\u0644\u0622\u064a\u0627\u062a \u0623\u0648 \u0627\u0644\u0623\u062d\u0627\u062f\u064a\u062b \u0625\u0646 \u0623\u0645\u0643\u0646\n\n"
-        "\u0627\u0643\u062a\u0628 \u0627\u0644\u0642\u0635\u0629 \u0641\u0642\u0637 \u0628\u062f\u0648\u0646 \u0639\u0646\u0648\u0627\u0646."
+        "\u0641\u064a \u0627\u0644\u0646\u0647\u0627\u064a\u0629\u060c \u0642\u062f\u0651\u0645 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0628\u062d\u062b \u0639\u0646 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0639\u0644\u0649 \u0634\u0643\u0644 \u0643\u0644\u0645\u0627\u062a \u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629 \u0645\u0641\u0635\u0648\u0644\u0629 \u0628\u0641\u0627\u0635\u0644\u0629 (comma-separated):\n\n"
+        "---\n"
+        "KEYWORDS: 10 keywords \u0644\u0628\u062d\u062b \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a \u062e\u0644\u0641\u064a\u0629 \u062a\u0646\u0627\u0633\u0628 \u0627\u0644\u0642\u0635\u0629\u060c \u0631\u0643\u0632 \u0639\u0644\u0649 \u0627\u0644\u0635\u062d\u0631\u0627\u0621 \u0648\u0627\u0644\u0637\u0628\u064a\u0639\u0629 \u0648\u0627\u0644\u0639\u0645\u0627\u0631\u0629 \u0627\u0644\u0625\u0633\u0644\u0627\u0645\u064a\u0629 \u0627\u0644\u0642\u062f\u064a\u0645\u0629.\n"
+        "\u0645\u062b\u0627\u0644: desert sand dunes, ancient mosque architecture, camel caravan sunset\n"
+        "---\n"
+        "CINE: 6 cinematic modifiers \u0644\u0637\u0627\u0628\u0639 \u0633\u064a\u0646\u0645\u0627\u0626\u064a.\n"
+        "\u0645\u062b\u0627\u0644: golden hour desert haze, volumetric light rays, dramatic sky\n"
+        "---\n"
+        "\u0627\u0644\u0625\u062e\u0631\u0627\u062c \u0627\u0644\u0645\u0637\u0644\u0648\u0628:\n"
+        "\u0627\u0644\u0642\u0635\u0629 \u0641\u0642\u0637 (first), \u062b\u0645 \u0633\u0637\u0631 \"===KEYWORDS===\"\u060c \u062b\u0645 \u0627\u0644\u0643\u0644\u0645\u0627\u062a \u0627\u0644\u0645\u0641\u0635\u0648\u0644\u0629\u060c \u062b\u0645 \u0633\u0637\u0631 \"===CINE===\"\u060c \u062b\u0645 \u0627\u0644\u0645\u062d\u0633\u0646\u0627\u062a \u0627\u0644\u0633\u064a\u0646\u0645\u0627\u0626\u064a\u0629."
     )
 
-    story = _groq_complete(prompt)
+    raw = _groq_complete(prompt)
+
+    # Split response into parts
+    keywords = []
+    cine_keywords = []
+    story = raw.strip()
+
+    kw_marker = "===KEYWORDS==="
+    cine_marker = "===CINE==="
+
+    if kw_marker in story and cine_marker in story:
+        parts = story.split(kw_marker)
+        story = parts[0].strip()
+        rest = parts[1]
+        cine_parts = rest.split(cine_marker)
+        kw_text = cine_parts[0].strip()
+        cine_text = cine_parts[1].strip() if len(cine_parts) > 1 else ""
+        keywords = [k.strip() for k in kw_text.replace("\n", ",").split(",") if k.strip() and len(k.strip()) > 2]
+        cine_keywords = [k.strip() for k in cine_text.replace("\n", ",").split(",") if k.strip() and len(k.strip()) > 2]
+    else:
+        scene_prompt = (
+            "Extract 10 visual search keywords in English for video footage describing this Arabic story.\n"
+            "Focus on early Islamic / Arabian historical visuals ONLY:\n"
+            "- desert landscapes, sand dunes, golden hour, sunset, sunrise\n"
+            "- ancient Arabic architecture, old mosque, minaret, arches\n"
+            "- camels, Arabian horses, oasis, palm trees\n"
+            "- mountains, valleys, caves, rocky desert\n"
+            "- starry night, crescent moon, dramatic sky, clouds\n"
+            "- old manuscripts, calligraphy, candlelight\n"
+            "- tents, traditional clothing, keffiyeh, thobe\n"
+            "- swords, shields, horses galloping, dust\n"
+            "AVOID: women, modern buildings, cities, cars, technology, people closeups.\n"
+            "Each keyword: 2-4 English words, nature/historical focused.\n"
+            f"Story:\n{story}\n"
+            "10 comma-separated keywords:"
+        )
+        keywords_raw = _groq_complete(scene_prompt)
+        keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip() and len(k.strip()) > 2]
+
+        cine_prompt = (
+            "For this Arabic historical/Islamic story, suggest 6 cinematic atmospheric search modifiers.\n"
+            "Examples: golden hour desert haze, volumetric light rays mosque, dust storm dramatic,\n"
+            "ancient stone texture sunset, starry desert night, candle flame flicker\n"
+            f"Story:\n{story}\n"
+            "6 comma-separated cinematic modifiers only:"
+        )
+        cine_raw = _groq_complete(cine_prompt)
+        cine_keywords = [k.strip() for k in cine_raw.replace("\n", ",").split(",") if k.strip() and len(k.strip()) > 2]
+
     story = _clean_text(story)
-    time.sleep(1)
-
-    scene_prompt = (
-        "Extract 7 visual search keywords in English for video footage describing this Arabic story.\n"
-        "Focus on early Islamic / Arabian historical visuals ONLY:\n"
-        "- desert landscapes, sand dunes, golden hour, sunset, sunrise\n"
-        "- ancient Arabic architecture, old mosque, minaret, arches\n"
-        "- camels, Arabian horses, oasis, palm trees\n"
-        "- mountains, valleys, caves, rocky desert\n"
-        "- starry night, crescent moon, dramatic sky, clouds\n"
-        "- old manuscripts, calligraphy, candlelight\n"
-        "- tents, traditional clothing, keffiyeh, thobe\n"
-        "- swords, shields, horses galloping, dust\n"
-        "AVOID: women, modern buildings, cities, cars, technology, people closeups.\n"
-        "Each keyword: 2-4 English words, nature/historical focused.\n"
-        f"Story:\n{story}\n"
-        "10 comma-separated keywords:"
-    )
-    keywords_raw = _groq_complete(scene_prompt)
-    keywords = [k.strip() for k in keywords_raw.replace("\n", ",").split(",") if k.strip()]
-    time.sleep(1)
-
-    cine_prompt = (
-        "For this Arabic historical/Islamic story, suggest 6 cinematic atmospheric search modifiers.\n"
-        "Examples: golden hour desert haze, volumetric light rays mosque, dust storm dramatic,\n"
-        "ancient stone texture sunset, starry desert night, candle flame flicker\n"
-        f"Story:\n{story}\n"
-        "6 comma-separated cinematic modifiers only:"
-    )
-    cine_raw = _groq_complete(cine_prompt)
-    cine_keywords = [k.strip() for k in cine_raw.replace("\n", ",").split(",") if k.strip()]
 
     data = {
         "topic_id": idx,
