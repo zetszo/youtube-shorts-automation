@@ -8,6 +8,7 @@ from script_gen import generate_script
 from voiceover import generate_voiceover
 from footage import download_footage
 from video_editor import create_video
+from thumbnail import generate_thumbnail
 from uploader import upload_video
 
 LOG_FILE = "output/log.json"
@@ -26,24 +27,31 @@ def run_one(language: str = None):
     start = time.time()
     lang = "ar"
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] بدء: {lang}")
+    print(f"[{ts}] \u0628\u062f\u0621: {lang}")
 
     try:
         sd = generate_script(lang)
-        print(f"  ✓ قصة #{sd['topic_id']} ({len(sd['story'].split())} كلمة)")
+        print(f"  \u2713 \u0642\u0635\u0629 #{sd['topic_id']} ({len(sd['story'].split())} \u0643\u0644\u0645\u0629)")
 
         generate_voiceover(sd)
-        print(f"  ✓ صوت")
+        print(f"  \u2713 \u0635\u0648\u062a ({len(sd.get('word_timings',[]))} \u0643\u0644\u0645\u0629 \u0645\u0648\u0642\u062a\u0629)")
 
         footage = download_footage(sd)
-        print(f"  ✓ {len(footage)} فيديوهات")
+        print(f"  \u2713 {len(footage)} \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a \u062e\u0644\u0641\u064a\u0629")
 
         create_video(sd, footage)
-        print(f"  ✓ فيديو")
+        print(f"  \u2713 \u0641\u064a\u062f\u064a\u0648")
+
+        try:
+            thumb = generate_thumbnail(sd.get("topic", "\u0642\u0635\u0629 \u0625\u0633\u0644\u0627\u0645\u064a\u0629"))
+            sd["thumbnail_file"] = thumb
+            print(f"  \u2713 \u0635\u0648\u0631\u0629 \u0645\u0635\u063a\u0631\u0629")
+        except Exception as e:
+            print(f"  \u26a0 \u0641\u0634\u0644 \u0627\u0644\u0635\u0648\u0631\u0629: {e}")
 
         if os.environ.get("UPLOAD_TO_YOUTUBE", "").lower() == "true":
             url = upload_video(sd)
-            print(f"  ✓ رفع: {url}")
+            print(f"  \u2713 \u0631\u0641\u0639: {url}")
             log_event({
                 "ts": ts, "topic_id": sd["topic_id"], "topic": sd["topic"],
                 "youtube_url": url, "seconds": round(time.time() - start, 1),
@@ -61,7 +69,7 @@ def run_one(language: str = None):
         import traceback
         tb = traceback.format_exc()
         log_event({"ts": ts, "lang": lang, "error": str(e), "traceback": tb, "status": "fail"})
-        print(f"  ✗ {e}")
+        print(f"  \u2717 {e}")
         print(tb)
         return False
 

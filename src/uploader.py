@@ -9,6 +9,27 @@ from config import YOUTUBE_CREDENTIALS_FILE, YOUTUBE_TOKEN_FILE
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
+HASHTAGS = [
+    "#قصص_إسلامية", "#اسلام", "#دين", "#اللهم",
+    "#انبياء", "#صحابة", "#السيرة_النبوية", "# shorts",
+    "#قران", "#ذكر", "#adhan", "#islamic_video",
+    "#خواطر_دينية", "#عبر_وعظات", "#إيمان", "#هداية",
+]
+
+CATEGORY_TAGS = {
+    "prophet": ["انبياء", "قصص الانبياء", "سيدنا", "عليه السلام", "نبي"],
+    "companion": ["صحابة", "الصحابة", "رضي الله عنه", "الخلفاء الراشدين"],
+    "story": ["قصة", "عبرة", "موعظة", "حكمة", "قصة اسلامية"],
+}
+
+VIRAL_TAGS = [
+    "قصص إسلامية", "Islamic stories", "quran", "allah",
+    "islamic shorts", "viral islam", "سبحان الله",
+    "islamic video", "muslim", "faith", "deen",
+    "قصص الانبياء", "الصحابة", "السيرة النبوية",
+    "islamic reminder", "motivation islam",
+]
+
 def _get_service():
     creds = None
     if os.path.exists(YOUTUBE_TOKEN_FILE):
@@ -26,20 +47,40 @@ def _get_service():
 
     return build("youtube", "v3", credentials=creds)
 
+def _build_tags(topic):
+    tags = set(VIRAL_TAGS)
+    topic_lower = topic.lower()
+    for key, words in CATEGORY_TAGS.items():
+        for w in words:
+            if w in topic_lower:
+                tags.update(words)
+    return list(tags)[:20]
+
 def upload_video(script_data: dict) -> str:
     video = script_data.get("video_file")
     if not video or not os.path.exists(video):
         raise FileNotFoundError(f"Video not found: {video}")
 
     topic = script_data.get("topic", "قصة إسلامية")
-    title = topic if len(topic) <= 100 else topic[:97] + "..."
-    desc = (
-        "قصص إسلامية وعبر من التاريخ\n"
-        "اشترك في القناة للمزيد 🕌\n\n"
-        "#قصص_إسلامية #Shorts #عبر"
-    )
-    tags = ["قصص إسلامية", "Shorts", "عبر", "تاريخ إسلامي", "ديني"]
+    title = topic if len(topic) <= 90 else topic[:87] + "..."
 
+    desc_parts = [
+        topic,
+        "",
+        "سبحان الله 💫 قصة مؤثرة من تاريخ الإسلام",
+        "لا تنسى الاشتراك في القناة وتفعيل الجرس 🔔",
+        "شارك القصة لتعم الفائدة 🤲",
+        "",
+        "---",
+        "".join(HASHTAGS),
+        "",
+        "📌 تابعنا للمزيد من القصص الإسلامية والعبر",
+    ]
+    desc = "\n".join(desc_parts)
+    tags = _build_tags(topic)
+
+    # Upload thumbnail if generated
+    thumb_path = script_data.get("thumbnail_file")
     body = {
         "snippet": {
             "title": title,
@@ -59,6 +100,14 @@ def upload_video(script_data: dict) -> str:
 
     vid = response["id"]
     url = f"https://youtu.be/{vid}"
+
+    # Upload thumbnail separately
+    if thumb_path and os.path.exists(thumb_path):
+        try:
+            youtube.thumbnails().set(videoId=vid, media_body=MediaFileUpload(thumb_path)).execute()
+        except Exception:
+            pass
+
     script_data["youtube_url"] = url
     script_data["youtube_id"] = vid
     return url
