@@ -7,3 +7,4 @@ google-auth-httplib2>=0.1.0
 google-api-python-client>=2.108.0
 arabic_reshaper>=3.0.0
 python-bidi>=0.4.2
+customtkinter>=5.2.0
