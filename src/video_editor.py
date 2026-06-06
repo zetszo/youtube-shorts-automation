@@ -25,8 +25,8 @@ except ImportError:
 FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
 
-EXPORT_FPS = 30
-EXPORT_BITRATE = "8000k"
+EXPORT_FPS = 24
+EXPORT_BITRATE = "4000k"
 
 # ─── visual ───
 FONT_SIZE = 200
@@ -360,7 +360,7 @@ def create_video(script_data, footage_clips):
     out = os.path.join(FINAL_DIR, f"shorts_{ts}_ar.mp4")
     log(f"rendering {out}")
     final.write_videofile(out, fps=EXPORT_FPS, codec="libx264", audio_codec="aac",
-                          bitrate=EXPORT_BITRATE, threads=2, preset="medium", logger=None)
+                          bitrate=EXPORT_BITRATE, threads=1, preset="veryfast", logger=None)
     audio.close()
     final.close()
     script_data["video_file"] = out
