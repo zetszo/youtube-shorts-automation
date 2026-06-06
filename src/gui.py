@@ -20,7 +20,7 @@ ctk.set_default_color_theme("green")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import GROQ_API_KEY, PEXELS_API_KEY, TTS_VOICE, TTS_RATE, TOPICS_ARABIC, VIDEO_WIDTH, VIDEO_HEIGHT
+from config import GROQ_API_KEY, PEXELS_API_KEY, TTS_VOICE, TTS_RATE, SEASONS, VIDEO_WIDTH, VIDEO_HEIGHT
 import script_gen
 import voiceover
 import footage
@@ -93,7 +93,8 @@ class App(ctk.CTk):
         ctk.CTkRadioButton(sf, text="\u0642\u0635\u0629 \u062c\u0627\u0647\u0632\u0629", variable=self.story_mode, value="preset", command=self._toggle_story_mode).grid(row=1, column=0, sticky="w", padx=5)
         ctk.CTkRadioButton(sf, text="\u0643\u062a\u0627\u0628\u0629 \u0645\u062e\u0635\u0635\u0629", variable=self.story_mode, value="custom", command=self._toggle_story_mode).grid(row=1, column=1, sticky="w", padx=5)
 
-        self.story_dropdown = ctk.CTkOptionMenu(sf, values=[t for _, t in TOPICS_ARABIC], command=self._on_story_select, width=400)
+        all_episodes = [f"{s['name']} - {ep[1]}" for s in SEASONS.values() for ep in s["episodes"]]
+        self.story_dropdown = ctk.CTkOptionMenu(sf, values=all_episodes, command=self._on_story_select, width=400)
         self.story_dropdown.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=2)
 
         self.story_text = ctk.CTkTextbox(sf, height=220, wrap="word")

@@ -31,7 +31,11 @@ def run_one(language: str = None):
 
     try:
         sd = generate_script(lang)
-        print(f"  \u2713 \u0642\u0635\u0629 #{sd['topic_id']} ({len(sd['story'].split())} \u0643\u0644\u0645\u0629)")
+        ep = sd.get("episode_id", sd.get("topic_id", ""))
+        season_info = ""
+        if "season_name" in sd:
+            season_info = f" | {sd['season_name']} \u0627\u0644\u062d\u0644\u0642\u0629 {sd.get('episode_num', '?')}/{sd.get('total_eps', '?')}"
+        print(f"  \u2713 {ep}{season_info} ({len(sd['story'].split())} \u0643\u0644\u0645\u0629)")
 
         generate_voiceover(sd)
         print(f"  \u2713 \u0635\u0648\u062a ({len(sd.get('word_timings',[]))} \u0643\u0644\u0645\u0629 \u0645\u0648\u0642\u062a\u0629)")
