@@ -52,7 +52,7 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          UPLOAD_TO_YOUTUBE: ${{ inputs.upload || (github.event_name == 'schedule' && 'true') || 'false' }}
+          UPLOAD_TO_YOUTUBE: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.upload == true)) && 'true' || 'false' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
         shell: bash
