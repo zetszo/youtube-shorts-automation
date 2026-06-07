@@ -71,6 +71,11 @@ def _groq_complete(prompt: str, retries: int = 5) -> str:
 
 def _get_next_episode(history):
     """Return (season_id, episode_id, episode_topic, is_finale) or (None, None, None, True) if all done."""
+    if history.get("finale_done"):
+        return None, None, None, True
+    if history.get("all_done"):
+        return None, None, None, True
+
     seasons = history.get("seasons", {})
     current_season = history.get("current_season", 1)
 
@@ -94,16 +99,20 @@ def _get_next_episode(history):
     return None, None, None, True
 
 def generate_script(language: str = "ar") -> dict:
-    history = {"seasons": {}, "current_season": 1, "total": 0, "all_done": False}
+    history = {"seasons": {}, "current_season": 1, "total": 0, "all_done": False, "used_keywords": []}
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, encoding="utf-8") as f:
             history = json.load(f)
+    history.setdefault("used_keywords", [])
 
     sid, eid, topic, is_finale = _get_next_episode(history)
 
     if is_finale or sid is None:
+        if history.get("finale_done"):
+            raise RuntimeError("\u062c\u0645\u064a\u0639 \u0627\u0644\u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a \u0627\u0643\u062a\u0645\u0644\u062a!")
         print(f"  \ud83c\udfc6 \u0643\u0644 \u0627\u0644\u0645\u0648\u0627\u0633\u0645 \u0627\u0643\u062a\u0645\u0644\u062a! \u0625\u0646\u0634\u0627\u0621 \u0641\u064a\u062f\u064a\u0648 \u0627\u0644\u062e\u062a\u0627\u0645...")
         history["all_done"] = True
+        history["finale_done"] = True
         topic = "\u0627\u0646\u062a\u0647\u062a \u0631\u062d\u0644\u062a\u0646\u0627 \u0645\u0639 \u0627\u0644\u0623\u0646\u0628\u064a\u0627\u0621 \u0648\u0627\u0644\u0635\u062d\u0627\u0628\u0629... \u0641\u0645\u0627 \u0627\u0644\u0633\u0644\u0633\u0644\u0629 \u0627\u0644\u0642\u0627\u062f\u0645\u0629\u061f"
         idx = "FINALE"
         season_info = {}
@@ -222,6 +231,14 @@ def generate_script(language: str = "ar") -> dict:
 
     if not keywords:
         keywords = random.sample(FALLBACK_KEYWORDS, min(8, len(FALLBACK_KEYWORDS)))
+
+    # Filter out keywords already used in previous episodes
+    used_keywords = set(history.get("used_keywords", []))
+    keywords = [k for k in keywords if k not in used_keywords]
+    if not keywords:
+        keywords = random.sample(FALLBACK_KEYWORDS, min(8, len(FALLBACK_KEYWORDS)))
+    used_keywords.update(keywords)
+    history["used_keywords"] = list(used_keywords)
 
     if not cine_keywords:
         cine_keywords = FALLBACK_CINE[:]
