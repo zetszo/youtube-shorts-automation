@@ -41,11 +41,15 @@ def _get_service():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            with open(YOUTUBE_TOKEN_FILE, "w", encoding="utf-8") as f:
-                f.write(creds.to_json())
-            print("  ↻ تم تجديد token اليوتيوب", file=sys.stderr)
-        else:
+            try:
+                creds.refresh(Request())
+                with open(YOUTUBE_TOKEN_FILE, "w", encoding="utf-8") as f:
+                    f.write(creds.to_json())
+                print("  ↻ تم تجديد token اليوتيوب", file=sys.stderr)
+            except Exception as e:
+                print(f"  ↻ فشل تجديد token: {e}", file=sys.stderr)
+                creds = None  # force re-auth flow below (will raise clear error on headless)
+        if not creds or not creds.valid:
             if not os.path.exists(YOUTUBE_CREDENTIALS_FILE):
                 raise RuntimeError(
                     "❌ client_secrets.json غير موجود.\n"
@@ -55,8 +59,9 @@ def _get_service():
             if os.environ.get("GITHUB_ACTIONS") == "true":
                 raise RuntimeError(
                     "❌ token اليوتيوب منتهي ولا يمكن تجديده في GitHub Actions.\n"
-                    "   شغّل python auth_youtube.py محلياً لإنشاء token.json جديد\n"
-                    "   ثم حدّث YT_TOKEN في GitHub Secrets"
+                    "   1. شغّل محلياً: python auth_youtube.py\n"
+                    "   2. حدّث YT_TOKEN في GitHub Secrets بالـ base64 الجديد\n"
+                    "   3. شغّل الـ pipeline مجدداً"
                 )
             flow = InstalledAppFlow.from_client_secrets_file(YOUTUBE_CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0, open_browser=False)

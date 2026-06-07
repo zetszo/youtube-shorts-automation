@@ -40,6 +40,7 @@ def main():
                 CLIENT_SECRETS, SCOPES,
                 redirect_uri="http://localhost:8080/"
             )
+            flow.authorization_url(access_type='offline', prompt='consent')
             creds = flow.run_local_server(port=8080, open_browser=True)
             print("✅ تم تسجيل الدخول!")
 
