@@ -26,9 +26,9 @@ FINAL_DIR = "output/final_videos"
 os.makedirs(FINAL_DIR, exist_ok=True)
 
 EXPORT_FPS = 24
-EXPORT_BITRATE = "4000k"
+EXPORT_BITRATE = "6000k"
 
-# ─── visual ───
+# visual
 FONT_SIZE = 200
 POP_SIZE = FONT_SIZE + 12
 STROKE_W = 8
@@ -36,7 +36,7 @@ PAD_X = 80
 PAD_Y = 60
 WORD_GAP = 32
 LINE_GAP = int(FONT_SIZE * 0.35)
-BG_ALPHA = 160
+BG_ALPHA = 140
 RADIUS = 36
 MAX_W = int(VIDEO_WIDTH * 0.88)
 CENTER_Y = int(VIDEO_HEIGHT * 0.50)
@@ -69,7 +69,7 @@ CDN_FONTS = [
 def log(msg):
     print(f"[VIDEO] {msg}", file=sys.stderr)
 
-# ─── font ───
+# font
 
 def _find_font():
     for p in FONT_CANDIDATES:
@@ -113,7 +113,7 @@ def _get_font(size):
             _FONT_CACHE[size] = ImageFont.load_default()
     return _FONT_CACHE[size]
 
-# ─── text shaping ───
+# text shaping
 
 def reshape(text):
     if not _CAN_REShAPE:
@@ -126,7 +126,7 @@ def reshape(text):
 def clean_diac(text):
     return re.sub(r'[ًٌٍَُِّْ]', '', text)
 
-# ─── measure ───
+# measure
 
 def _measure(r, font_size):
     font = _get_font(font_size)
@@ -136,7 +136,7 @@ def _measure(r, font_size):
     bb = d.textbbox((0, 0), r, font=font, stroke_width=sw)
     return bb[2] - bb[0], bb[3] - bb[1], bb[0], bb[1]
 
-# ─── word rendering ───
+# word rendering
 
 def _render_word(text, color, font_size):
     key = (text, color, font_size)
@@ -166,7 +166,7 @@ def _render_word(text, color, font_size):
     _WORD_CACHE[key] = img
     return img
 
-# ─── layout (word-wrap within MAX_W) ───
+# layout (word-wrap within MAX_W)
 
 def _layout(words, active_idx):
     font_size = FONT_SIZE
@@ -207,7 +207,7 @@ def _layout(words, active_idx):
             x -= WORD_GAP
     return out
 
-# ─── render subtitle box ───
+# render subtitle box
 
 def render_box(words, active_idx):
     pos = _layout(words, active_idx)
@@ -241,7 +241,7 @@ def render_box(words, active_idx):
     sy = CENTER_Y - bh // 2
     return bg, sx, sy
 
-# ─── timestamp pipeline ───
+# timestamp pipeline
 
 def build_word_timestamps(text, word_timings):
     tw = [w for w in (word_timings or [])
@@ -297,14 +297,14 @@ def build_segment_clips(seg, total_dur):
             clips.append(ImageClip(np.array(box)).with_duration(final_dur).with_start(final_st).with_position((sx, sy)))
     return clips
 
-# ─── dark overlay ───
+# dark overlay with gradient edges
 
 def _make_dark(total_dur):
     return (ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0))
             .with_duration(total_dur)
-            .with_opacity(0.30))
+            .with_opacity(0.20))
 
-# ─── main ───
+# main
 
 def create_video(script_data, footage_clips):
     story = script_data["story"]
@@ -316,9 +316,12 @@ def create_video(script_data, footage_clips):
     for c in footage_clips:
         try:
             clip = VideoFileClip(c["path"]).resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
+            if clip.duration < 1.0:
+                clip.close()
+                continue
             parts.append(clip)
         except Exception as e:
-            log(f"footage skip: {e}")
+            log(f"footage skip: {c.get('path','?')} - {e}")
 
     if not parts:
         bg = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(20, 30, 50)).with_duration(total)

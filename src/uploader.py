@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -39,11 +40,26 @@ def _get_service():
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            with open(YOUTUBE_TOKEN_FILE, "w", encoding="utf-8") as f:
+                f.write(creds.to_json())
+            print("  ↻ تم تجديد token اليوتيوب", file=sys.stderr)
         else:
+            if not os.path.exists(YOUTUBE_CREDENTIALS_FILE):
+                raise RuntimeError(
+                    "❌ client_secrets.json غير موجود.\n"
+                    "   شغّل python auth_youtube.py محلياً لإنشاء token.json\n"
+                    "   وانسخ base64 إلى GitHub Secrets YT_TOKEN و YT_CLIENT_SECRETS"
+                )
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                raise RuntimeError(
+                    "❌ token اليوتيوب منتهي ولا يمكن تجديده في GitHub Actions.\n"
+                    "   شغّل python auth_youtube.py محلياً لإنشاء token.json جديد\n"
+                    "   ثم حدّث YT_TOKEN في GitHub Secrets"
+                )
             flow = InstalledAppFlow.from_client_secrets_file(YOUTUBE_CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0, open_browser=False)
-        with open(YOUTUBE_TOKEN_FILE, "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
+            with open(YOUTUBE_TOKEN_FILE, "w", encoding="utf-8") as f:
+                f.write(creds.to_json())
 
     return build("youtube", "v3", credentials=creds)
 
@@ -79,7 +95,6 @@ def upload_video(script_data: dict) -> str:
     desc = "\n".join(desc_parts)
     tags = _build_tags(topic)
 
-    # Upload thumbnail if generated
     thumb_path = script_data.get("thumbnail_file")
     body = {
         "snippet": {
@@ -95,16 +110,18 @@ def upload_video(script_data: dict) -> str:
     }
 
     youtube = _get_service()
+    print(f"  ↻ جاري رفع الفيديو إلى YouTube...", file=sys.stderr)
     media = MediaFileUpload(video, chunksize=-1, resumable=True)
     response = youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
 
     vid = response["id"]
     url = f"https://youtu.be/{vid}"
+    print(f"  ✓ رفع: {url}", file=sys.stderr)
 
-    # Upload thumbnail separately
     if thumb_path and os.path.exists(thumb_path):
         try:
             youtube.thumbnails().set(videoId=vid, media_body=MediaFileUpload(thumb_path)).execute()
+            print(f"  ✓ thumbnail مرفوعة", file=sys.stderr)
         except Exception:
             pass
 
