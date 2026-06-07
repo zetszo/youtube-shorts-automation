@@ -53,25 +53,26 @@ def run_one(language: str = None):
         except Exception as e:
             print(f"  \u26a0 \u0641\u0634\u0644 \u0627\u0644\u0635\u0648\u0631\u0629: {e}")
 
+        tid = sd.get("topic_id", sd.get("episode_id", ""))
         if os.environ.get("UPLOAD_TO_YOUTUBE", "").lower() == "true":
             try:
                 url = upload_video(sd)
                 print(f"  \u2713 \u0631\u0641\u0639: {url}")
                 log_event({
-                    "ts": ts, "topic_id": sd["topic_id"], "topic": sd["topic"],
+                    "ts": ts, "topic_id": tid, "topic": sd["topic"],
                     "youtube_url": url, "seconds": round(time.time() - start, 1),
                     "status": "ok",
                 })
             except Exception as e:
                 print(f"  \u2717 \u0641\u0634\u0644 \u0627\u0644\u0631\u0641\u0639: {e}")
                 log_event({
-                    "ts": ts, "topic_id": sd["topic_id"], "topic": sd["topic"],
+                    "ts": ts, "topic_id": tid, "topic": sd["topic"],
                     "error": str(e), "seconds": round(time.time() - start, 1),
                     "status": "upload_failed",
                 })
         else:
             log_event({
-                "ts": ts, "topic_id": sd["topic_id"], "topic": sd["topic"],
+                "ts": ts, "topic_id": tid, "topic": sd["topic"],
                 "video_file": sd.get("video_file"),
                 "seconds": round(time.time() - start, 1),
                 "status": "preview",
