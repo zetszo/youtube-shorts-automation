@@ -7,3 +7,5 @@ output/
 __pycache__/
 device_info.json
 device_code.txt
+
+github_secrets.txt
