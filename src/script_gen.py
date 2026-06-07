@@ -182,11 +182,18 @@ def generate_script(language: str = "ar") -> dict:
             "6. خاتمة قوية تدفع للتفاعل: سؤال، أو دعاء، أو 'اللهم صل على سيدنا محمد'\n"
             "7. في النهاية اترك فضولاً للجزء القادم\n"
             f"8. المدة: {word_target}\n\n"
-            "تعليمات صارمة جداً: أخرِج النص القصصي فقط بدون أي عبارات تمهيدية أو تعريفية أو ترقيم أو عناوين. لا تكتب 'إليك القصة' أو 'القصة:' أو 'الافتتاحية:' أو أي شيء قبل القصة. ابدأ مباشرة بجملة القصة الأولى. لا تكتب 'المطلوب' أو 'الحلقة' أو أي شيء يتعلق بالتعليمات.\n\n"
-            "بعد القصة مباشرة، اكتب سطراً بالصيغة التالية بالضبط:\n"
+            "تعليمات صارمة جداً: أخرِج أولاً ##TITLE## ثم القصة ثم ##KEYWORDS##\n\n"
+            "السطر الأول بالضبط:\n"
+            "##TITLE## عنوان مثير للفضول (40-60 حرفاً) يبرز الجانب المجهول أو المذهل من القصة\n"
+            "مثال: ##TITLE## الصحابي الذي بكى منه الرسول ﷺ\n\n"
+            "ثم اكتب القصة مباشرة بدون أي عبارات تمهيدية. ابدأ بأول 5 ثوانٍ أقوى جملة.\n\n"
+            "بعد القصة مباشرة:\n"
             "##KEYWORDS## كلمة1, كلمة2, كلمة3, كلمة4, كلمة5, كلمة6, كلمة7, كلمة8\n"
             "(8-10 كلمات إنجليزية عن desert, mosque, islamic, historical, arabian مناسبة للقصة)\n\n"
-            "اكتب القصة كاملة ثم الكلمات المفتاحية."
+            "صيغة الخرج:\n"
+            "##TITLE## ...\n"
+            "[نص القصة]\n"
+            "##KEYWORDS## ..."
         )
 
         data = {
@@ -203,11 +210,26 @@ def generate_script(language: str = "ar") -> dict:
         story_raw = ""
 
     story = story_raw
+    ctr_title = ""
     keywords = []
     cine_keywords = []
 
-    if "##KEYWORDS##" in story_raw:
-        parts = story_raw.split("##KEYWORDS##")
+    # Extract ##TITLE## (first line, before story)
+    if "##TITLE##" in story_raw:
+        after_title = story_raw.split("##TITLE##", 1)[1].strip()
+        if "\n" in after_title:
+            ctr_title = after_title.split("\n", 1)[0].strip()
+            story = after_title.split("\n", 1)[1].strip()
+        else:
+            ctr_title = after_title
+            story = ""
+    # Truncate title to 90 chars for YouTube
+    if ctr_title:
+        ctr_title = ctr_title[:90]
+
+    # Extract ##KEYWORDS## from remaining story
+    if "##KEYWORDS##" in story:
+        parts = story.split("##KEYWORDS##")
         story = parts[0].strip()
         kw_text = parts[1].strip()
         keywords = [k.strip() for k in kw_text.replace("\n", ",").split(",") if k.strip() and len(k.strip()) > 2]
@@ -217,6 +239,9 @@ def generate_script(language: str = "ar") -> dict:
 
     if not cine_keywords:
         cine_keywords = FALLBACK_CINE[:]
+
+    # Clean the story text
+    story = _clean_text(story)
 
     if not story:
         hooks = [
@@ -231,10 +256,9 @@ def generate_script(language: str = "ar") -> dict:
             "اللهم صل على سيدنا محمد."
         )
 
-    story = _clean_text(story)
-
     data.update({
         "topic": topic,
+        "ctr_title": ctr_title or topic,
         "story": story,
         "keywords": keywords[:10],
         "cine_keywords": cine_keywords[:6],

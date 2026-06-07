@@ -88,7 +88,7 @@ async def generate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             video_editor.create_video(sd, clips)
             try:
                 thumb = thumbnail.generate_thumbnail(
-                    topic=sd.get("topic", ""),
+                    topic=sd.get("ctr_title", sd.get("topic", "")),
                     season_name=sd.get("season_name", ""),
                     video_path=sd.get("video_file")
                 )

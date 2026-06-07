@@ -61,7 +61,7 @@ def run_one(language: str = None):
 
         try:
             thumb = generate_thumbnail(
-                topic=sd.get("topic", "قصة إسلامية"),
+                topic=sd.get("ctr_title", sd.get("topic", "قصة إسلامية")),
                 season_name=sd.get("season_name", ""),
                 video_path=sd.get("video_file")
             )
