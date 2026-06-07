@@ -42,7 +42,9 @@ jobs:
       - name: Cache output state (history, scripts)
         uses: actions/cache@v4
         with:
-          path: output/
+          path: |
+            output/history.json
+            output/scripts/
           key: output-state-${{ github.run_id }}
           restore-keys: |
             output-state-
