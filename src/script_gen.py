@@ -157,7 +157,7 @@ def generate_script(language: str = "ar") -> dict:
         is_last = eps_in_season == eps_total
         season_name = season_config["name"]
 
-        word_target = "60-80 ثانية (150-200 كلمة)" if sid == 3 else "90-120 ثانية (250-350 كلمة)"
+        word_target = "60-80 ثانية (150-200 كلمة)" if sid == 3 else "90-120 ثانية (200-250 كلمة)"
 
         intro_line = ""
         if is_first:
