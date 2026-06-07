@@ -281,39 +281,52 @@ def _clean_text(text: str) -> str:
     # Prefixes that indicate instructional/prompt text (not part of the story)
     _blocked_prefixes = (
         "**", "*",
+        # Arabic instruction words
         "المطلوب", "تعليمات", "الهدف", "ملاحظات", "تعليمات صارمة",
         "أنت خبير", "أريد إنشاء", "قم بإنتاج", "اجعل الأسلوب",
         "بعد القصة", "اكتب القصة", "##",
         "إليك", "هذه هي القصة", "القصة:", "القصة المطلوبة",
         "بالطبع", "بالتأكيد", "سأكتب", "إليك النص",
+        # Section headers
         "الافتتاحية", "الخاتمة", "العنوان", "نص الراوي",
         "السرد", "المقدمة", "نهاية",
         "الحلقة", "موسم", "الموسم",
+        # Meta keywords
         "SEO", "كلمات مفتاحية", "هاشتاغ", "هاشتاج",
         "اقتراح", "وصف", "مؤثرات",
         "تقييم", "احتمالية",
+        "محتوى", "فيديو", "فايروس",
         # Arabic numbered lists
         "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "0.",
         "1-", "2-", "3-", "4-", "5-",
         "1)", "2)", "3)", "4)", "5)",
+        # More model artifacts
+        "السطر الأول", "صيغة الخرج", "مثال:", "أمثلة:",
+        "قواعد", "قاعدة أول", "قاعدة الـ",
+        "ممنوع", "يجب", "ملاحظة:",
+        "تنسيق", "الإخراج", "الخرج",
     )
 
     filtered = []
     for line in lines:
         if not line:
             continue
-        # Skip if starts with blocked prefix
         skip = False
         for p in _blocked_prefixes:
             if line.startswith(p):
                 skip = True
                 break
-        # Skip very short lines that aren't story (shorter than 7 chars and not a hook)
+        # Skip very short lines
         if not skip and len(line) < 7:
             skip = True
-        # Skip lines with more colons than actual Arabic text content
-        if not skip and line.count(":") >= 2 and len(line) < 40:
+        # Skip lines with instruction-like colons (e.g. "المدة: 90 ثانية", "اللغة: عربية")
+        if not skip and ":" in line and len(line) < 35:
             skip = True
+        # Skip lines that are purely ASCII or contain code-like text
+        if not skip:
+            arabic_chars = sum(1 for c in line if '\u0600' <= c <= '\u06ff' or '\u0750' <= c <= '\u077f' or '\ufe70' <= c <= '\ufeff')
+            if arabic_chars == 0 and len(line) > 3:
+                skip = True
         if not skip:
             filtered.append(line)
 
@@ -321,6 +334,12 @@ def _clean_text(text: str) -> str:
 
     # Remove leading/trailing quotes or dashes
     story = story.strip().strip('"').strip("'").strip("-").strip()
-    # Remove any remaining prompt artifacts in the middle
-    story = re.sub(r'(?:المطلوب|الهدف|ملاحظات|تعليمات)\s*:\s*', '', story)
+    # Remove common instructional patterns from the middle of text
+    story = re.sub(r'(?:المطلوب|الهدف|ملاحظات|تعليمات|قواعد|ممنوع|يجب)\s*:?\s*', '', story)
+    # Remove "الحلقة X من Y" pattern
+    story = re.sub(r'الحلقة\s+\d+\s+من\s+\d+[\s\-]*', '', story)
+    # Remove numbered instruction patterns like "1. " or "1- " at line start
+    story = re.sub(r'(?:^|\s)[\d]+[\.\-\)]\s+', ' ', story)
+    # Collapse multiple spaces
+    story = re.sub(r'\s+', ' ', story).strip()
     return story
