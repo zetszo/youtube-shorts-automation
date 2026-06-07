@@ -60,7 +60,11 @@ def run_one(language: str = None):
         print(f"  ✓ فيديو")
 
         try:
-            thumb = generate_thumbnail(sd.get("topic", "قصة إسلامية"))
+            thumb = generate_thumbnail(
+                topic=sd.get("topic", "قصة إسلامية"),
+                season_name=sd.get("season_name", ""),
+                video_path=sd.get("video_file")
+            )
             sd["thumbnail_file"] = thumb
             print(f"  ✓ صورة مصغرة")
         except Exception as e:
