@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import re
 import requests
 import time
 from datetime import datetime
@@ -181,6 +182,7 @@ def generate_script(language: str = "ar") -> dict:
             "6. خاتمة قوية تدفع للتفاعل: سؤال، أو دعاء، أو 'اللهم صل على سيدنا محمد'\n"
             "7. في النهاية اترك فضولاً للجزء القادم\n"
             f"8. المدة: {word_target}\n\n"
+            "تعليمات صارمة جداً: أخرِج النص القصصي فقط بدون أي عبارات تمهيدية أو تعريفية أو ترقيم أو عناوين. لا تكتب 'إليك القصة' أو 'القصة:' أو 'الافتتاحية:' أو أي شيء قبل القصة. ابدأ مباشرة بجملة القصة الأولى. لا تكتب 'المطلوب' أو 'الحلقة' أو أي شيء يتعلق بالتعليمات.\n\n"
             "بعد القصة مباشرة، اكتب سطراً بالصيغة التالية بالضبط:\n"
             "##KEYWORDS## كلمة1, كلمة2, كلمة3, كلمة4, كلمة5, كلمة6, كلمة7, كلمة8\n"
             "(8-10 كلمات إنجليزية عن desert, mosque, islamic, historical, arabian مناسبة للقصة)\n\n"
@@ -218,15 +220,15 @@ def generate_script(language: str = "ar") -> dict:
 
     if not story:
         hooks = [
-            "\u0647\u0644 \u062a\u0635\u062f\u0651\u0642 \u0623\u0646\u061f ",
-            "\u0642\u0635\u0629 \u0644\u0646 \u062a\u0635\u062f\u0651\u0642\u0647\u0627! ",
-            "\u0633\u0628\u062d\u0627\u0646 \u0627\u0644\u0644\u0647! ",
+            "هل تصدّق أن؟ ",
+            "قصة لن تصدقها! ",
+            "سبحان الله! ",
         ]
         story = (
             random.choice(hooks) + topic + ". "
-            "\u0647\u0630\u0647 \u0642\u0635\u0629 \u0639\u0638\u064a\u0645\u0629 \u0645\u0646 \u062a\u0627\u0631\u064a\u062e\u0646\u0627 \u0627\u0644\u0625\u0633\u0644\u0627\u0645\u064a. "
-            "\u0641\u064a\u0647\u0627 \u0639\u0628\u0631 \u0648\u0639\u0638\u0627\u062a \u0643\u062b\u064a\u0631\u0629. "
-            "\u0627\u0644\u0644\u0647\u0645 \u0635\u0644 \u0639\u0644\u0649 \u0633\u064a\u062f\u0646\u0627 \u0645\u062d\u0645\u062f."
+            "هذه قصة عظيمة من تاريخنا الإسلامي. "
+            "فيها عبر وعظات كثيرة. "
+            "اللهم صل على سيدنا محمد."
         )
 
     story = _clean_text(story)
@@ -250,5 +252,50 @@ def generate_script(language: str = "ar") -> dict:
 
 def _clean_text(text: str) -> str:
     lines = [l.strip() for l in text.strip().split("\n")]
-    lines = [l for l in lines if l and not l.startswith(("**", "*"))]
-    return " ".join(lines)
+
+    # Prefixes that indicate instructional/prompt text (not part of the story)
+    _blocked_prefixes = (
+        "**", "*",
+        "المطلوب", "تعليمات", "الهدف", "ملاحظات", "تعليمات صارمة",
+        "أنت خبير", "أريد إنشاء", "قم بإنتاج", "اجعل الأسلوب",
+        "بعد القصة", "اكتب القصة", "##",
+        "إليك", "هذه هي القصة", "القصة:", "القصة المطلوبة",
+        "بالطبع", "بالتأكيد", "سأكتب", "إليك النص",
+        "الافتتاحية", "الخاتمة", "العنوان", "نص الراوي",
+        "السرد", "المقدمة", "نهاية",
+        "الحلقة", "موسم", "الموسم",
+        "SEO", "كلمات مفتاحية", "هاشتاغ", "هاشتاج",
+        "اقتراح", "وصف", "مؤثرات",
+        "تقييم", "احتمالية",
+        # Arabic numbered lists
+        "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "0.",
+        "1-", "2-", "3-", "4-", "5-",
+        "1)", "2)", "3)", "4)", "5)",
+    )
+
+    filtered = []
+    for line in lines:
+        if not line:
+            continue
+        # Skip if starts with blocked prefix
+        skip = False
+        for p in _blocked_prefixes:
+            if line.startswith(p):
+                skip = True
+                break
+        # Skip very short lines that aren't story (shorter than 7 chars and not a hook)
+        if not skip and len(line) < 7:
+            skip = True
+        # Skip lines with more colons than actual Arabic text content
+        if not skip and line.count(":") >= 2 and len(line) < 40:
+            skip = True
+        if not skip:
+            filtered.append(line)
+
+    story = " ".join(filtered) if filtered else ""
+
+    # Remove leading/trailing quotes or dashes
+    story = story.strip().strip('"').strip("'").strip("-").strip()
+    # Remove any remaining prompt artifacts in the middle
+    story = re.sub(r'(?:المطلوب|الهدف|ملاحظات|تعليمات)\s*:\s*', '', story)
+    return story
