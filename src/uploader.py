@@ -1,11 +1,13 @@
 import json
 import os
 import sys
+import time
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
 from config import YOUTUBE_CREDENTIALS_FILE, YOUTUBE_TOKEN_FILE
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
@@ -112,11 +114,28 @@ def upload_video(script_data: dict) -> str:
     youtube = _get_service()
     print(f"  ↻ جاري رفع الفيديو إلى YouTube...", file=sys.stderr)
     media = MediaFileUpload(video, chunksize=-1, resumable=True)
-    response = youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
 
-    vid = response["id"]
-    url = f"https://youtu.be/{vid}"
-    print(f"  ✓ رفع: {url}", file=sys.stderr)
+    # Retry API call with backoff
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            response = youtube.videos().insert(
+                part="snippet,status", body=body, media_body=media
+            ).execute()
+            vid = response["id"]
+            url = f"https://youtu.be/{vid}"
+            print(f"  ✓ رفع: {url}", file=sys.stderr)
+            break
+        except HttpError as e:
+            last_err = e
+            if e.resp.status in [429, 500, 502, 503, 504]:
+                wait = 5 * attempt
+                print(f"  ⏳ خطأ {e.resp.status}، انتظار {wait}ث...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            raise
+    else:
+        raise last_err or RuntimeError("رفع فاشل")
 
     if thumb_path and os.path.exists(thumb_path):
         try:

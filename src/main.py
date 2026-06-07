@@ -14,6 +14,8 @@ from uploader import upload_video
 LOG_FILE = "output/log.json"
 os.makedirs("output", exist_ok=True)
 
+UPLOAD_RETRIES = 3
+
 def log_event(event: dict):
     logs = []
     if os.path.exists(LOG_FILE):
@@ -23,51 +25,73 @@ def log_event(event: dict):
     with open(LOG_FILE, "w", encoding="utf-8") as f:
         json.dump(logs, f, ensure_ascii=False, indent=2)
 
+def _should_upload():
+    """Auto-detect: upload if UPLOAD_TO_YOUTUBE=true OR if credentials exist."""
+    env = os.environ.get("UPLOAD_TO_YOUTUBE", "").lower()
+    if env == "true":
+        return True
+    if env == "":
+        # auto-detect: try upload if token file exists
+        if os.path.exists("token.json") and os.path.exists("client_secrets.json"):
+            return True
+    return False
+
 def run_one(language: str = None):
     start = time.time()
     lang = "ar"
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] \u0628\u062f\u0621: {lang}")
+    print(f"[{ts}] بدء: {lang}")
 
     try:
         sd = generate_script(lang)
         ep = sd.get("episode_id", sd.get("topic_id", ""))
         season_info = ""
         if "season_name" in sd:
-            season_info = f" | {sd['season_name']} \u0627\u0644\u062d\u0644\u0642\u0629 {sd.get('episode_num', '?')}/{sd.get('total_eps', '?')}"
-        print(f"  \u2713 {ep}{season_info} ({len(sd['story'].split())} \u0643\u0644\u0645\u0629)")
+            season_info = f" | {sd['season_name']} الحلقة {sd.get('episode_num', '?')}/{sd.get('total_eps', '?')}"
+        print(f"  ✓ {ep}{season_info} ({len(sd['story'].split())} كلمة)")
 
         generate_voiceover(sd)
-        print(f"  \u2713 \u0635\u0648\u062a ({len(sd.get('word_timings',[]))} \u0643\u0644\u0645\u0629 \u0645\u0648\u0642\u062a\u0629)")
+        print(f"  ✓ صوت ({len(sd.get('word_timings',[]))} كلمة موقتة)")
 
         footage = download_footage(sd)
-        print(f"  \u2713 {len(footage)} \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a \u062e\u0644\u0641\u064a\u0629")
+        print(f"  ✓ {len(footage)} فيديوهات خلفية")
 
         create_video(sd, footage)
-        print(f"  \u2713 \u0641\u064a\u062f\u064a\u0648")
+        print(f"  ✓ فيديو")
 
         try:
-            thumb = generate_thumbnail(sd.get("topic", "\u0642\u0635\u0629 \u0625\u0633\u0644\u0627\u0645\u064a\u0629"))
+            thumb = generate_thumbnail(sd.get("topic", "قصة إسلامية"))
             sd["thumbnail_file"] = thumb
-            print(f"  \u2713 \u0635\u0648\u0631\u0629 \u0645\u0635\u063a\u0631\u0629")
+            print(f"  ✓ صورة مصغرة")
         except Exception as e:
-            print(f"  \u26a0 \u0641\u0634\u0644 \u0627\u0644\u0635\u0648\u0631\u0629: {e}")
+            print(f"  ⚠ فشل الصورة: {e}")
 
         tid = sd.get("topic_id", sd.get("episode_id", ""))
-        if os.environ.get("UPLOAD_TO_YOUTUBE", "").lower() == "true":
-            try:
-                url = upload_video(sd)
-                print(f"  \u2713 \u0631\u0641\u0639: {url}")
+
+        if _should_upload():
+            last_err = None
+            for attempt in range(1, UPLOAD_RETRIES + 1):
+                try:
+                    url = upload_video(sd)
+                    print(f"  ✓ رفع: {url}")
+                    log_event({
+                        "ts": ts, "topic_id": tid, "topic": sd["topic"],
+                        "youtube_url": url, "seconds": round(time.time() - start, 1),
+                        "status": "ok",
+                    })
+                    break
+                except Exception as e:
+                    last_err = e
+                    print(f"  ✗ محاولة {attempt}/{UPLOAD_RETRIES} فشلت: {e}")
+                    if attempt < UPLOAD_RETRIES:
+                        wait = 10 * attempt
+                        print(f"  ⏳ انتظار {wait}ث وإعادة المحاولة...")
+                        time.sleep(wait)
+            if last_err:
+                print(f"  ✗ فشل الرفع بعد {UPLOAD_RETRIES} محاولات: {last_err}")
                 log_event({
                     "ts": ts, "topic_id": tid, "topic": sd["topic"],
-                    "youtube_url": url, "seconds": round(time.time() - start, 1),
-                    "status": "ok",
-                })
-            except Exception as e:
-                print(f"  \u2717 \u0641\u0634\u0644 \u0627\u0644\u0631\u0641\u0639: {e}")
-                log_event({
-                    "ts": ts, "topic_id": tid, "topic": sd["topic"],
-                    "error": str(e), "seconds": round(time.time() - start, 1),
+                    "error": str(last_err), "seconds": round(time.time() - start, 1),
                     "status": "upload_failed",
                 })
         else:
@@ -82,7 +106,7 @@ def run_one(language: str = None):
         import traceback
         tb = traceback.format_exc()
         log_event({"ts": ts, "lang": lang, "error": str(e), "traceback": tb, "status": "fail"})
-        print(f"  \u2717 {e}")
+        print(f"  ✗ {e}")
         print(tb)
         return False
 
