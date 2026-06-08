@@ -300,9 +300,15 @@ def build_segment_clips(seg, total_dur):
 # dark overlay with gradient edges
 
 def _make_dark(total_dur):
-    return (ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(0, 0, 0))
-            .with_duration(total_dur)
-            .with_opacity(0.20))
+    """Bottom-heavy gradient overlay: darker at bottom for text, lighter at top."""
+    import numpy as np
+    arr = np.zeros((VIDEO_HEIGHT, VIDEO_WIDTH, 4), dtype=np.uint8)
+    for y in range(VIDEO_HEIGHT):
+        # Bottom (y near height) = darker, Top (y near 0) = lighter
+        ratio = y / VIDEO_HEIGHT
+        alpha = int(50 + ratio * 160)  # 50 at top, 210 at bottom
+        arr[y, :, 3] = min(alpha, 210)
+    return (ImageClip(arr).with_duration(total_dur))
 
 # channel watermark
 
