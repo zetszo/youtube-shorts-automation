@@ -2,6 +2,7 @@ import json
 import os
 import random
 import re
+import shutil
 import requests
 import time
 from datetime import datetime
@@ -102,7 +103,15 @@ def generate_script(language: str = "ar") -> dict:
     history = {"seasons": {}, "current_season": 1, "total": 0, "all_done": False, "used_keywords": []}
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, encoding="utf-8") as f:
-            history = json.load(f)
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            loaded.setdefault("seasons", {})
+            loaded.setdefault("current_season", 1)
+            loaded.setdefault("total", 0)
+            loaded.setdefault("all_done", False)
+            loaded.setdefault("used_keywords", [])
+            loaded.setdefault("finale_done", False)
+            history = loaded
     history.setdefault("used_keywords", [])
 
     sid, eid, topic, is_finale = _get_next_episode(history)
@@ -136,6 +145,9 @@ def generate_script(language: str = "ar") -> dict:
             "total_eps": eps_total,
         }
 
+        # Backup then save history
+        if os.path.exists(HISTORY_FILE):
+            shutil.copy2(HISTORY_FILE, HISTORY_FILE + ".bak")
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
 
@@ -293,6 +305,8 @@ def generate_script(language: str = "ar") -> dict:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+    if os.path.exists(HISTORY_FILE):
+        shutil.copy2(HISTORY_FILE, HISTORY_FILE + ".bak")
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
