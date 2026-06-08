@@ -9,3 +9,4 @@ device_info.json
 device_code.txt
 
 github_secrets.txt
+.env
