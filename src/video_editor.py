@@ -346,7 +346,7 @@ def create_video(script_data, footage_clips):
     # Mix background music
     try:
         from background_music import get_background_audio
-        bg_music = get_background_audio(total)
+        bg_music = get_background_audio(total, topic=script_data.get("topic", ""))
         if bg_music is not None:
             from moviepy import CompositeAudioClip
             audio = CompositeAudioClip([audio, bg_music])

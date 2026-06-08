@@ -1,7 +1,9 @@
 client_secrets.json
 token.pickle
 token.json
-output/
+output/*
+!output/music/
+!output/music/**
 *.mp4
 *.mp3
 __pycache__/
