@@ -3,7 +3,7 @@ import random
 import re
 import numpy as np
 
-MUSIC_DIR = "output/music"
+MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "output", "music")
 _TRACK_CACHE = None
 
 # Mood keywords in filenames (lowercase)
@@ -87,7 +87,7 @@ def get_background_audio(duration, topic=""):
             n_loops = int(np.ceil(duration / music.duration))
             music = concatenate_audioclips([music] * n_loops)
         music = music.subclipped(0, duration)
-        music = music.with_volume_scaled(0.15)
+        music = music.with_volume_scaled(0.20)
         fade = min(3.0, duration * 0.1)
         music = music.with_effects([AudioFadeIn(fade), AudioFadeOut(fade)])
         return music

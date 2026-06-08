@@ -499,6 +499,16 @@ def create_video(script_data, footage_clips):
     offset = intro_dur
     log(f"audio: {total:.1f}s | story: {len(story.split())} words | font={FONT_SIZE}px")
 
+    # Mix background music
+    try:
+        from background_music import get_background_audio
+        bg_music = get_background_audio(total, topic=script_data.get("topic", ""))
+        if bg_music is not None:
+            audio = CompositeAudioClip([audio, bg_music])
+            log(f"bg music mixed (level 15%)")
+    except Exception as e:
+        log(f"bg music skip: {e}")
+
     parts = []
     for c in footage_clips:
         try:
