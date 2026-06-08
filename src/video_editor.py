@@ -437,6 +437,65 @@ def _make_lesson_card(total_dur, tip1_text, tip2_text, season_colors):
         log(f"lesson card skip: {e}")
         return None
 
+# next episode card
+
+def _make_next_card(total_dur, next_topic, season_colors):
+    if not next_topic:
+        return None
+    try:
+        font_topic = _get_font(40)
+        font_label = _get_font(26)
+        dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        label = "\u0627\u0644\u062d\u0644\u0642\u0629 \u0627\u0644\u0642\u0627\u062f\u0645\u0629"
+        lines = []
+        for w in next_topic.split():
+            if not lines:
+                lines.append(w)
+            else:
+                test = lines[-1] + " " + w
+                bb = dummy.textbbox((0, 0), test, font=font_topic)
+                if bb[2] - bb[0] < VIDEO_WIDTH * 0.80:
+                    lines[-1] = test
+                else:
+                    lines.append(w)
+        # Measure
+        lb = dummy.textbbox((0, 0), label, font=font_label)
+        lh = lb[3] - lb[1]
+        th = 0
+        for line in lines:
+            bb = dummy.textbbox((0, 0), line, font=font_topic)
+            th += bb[3] - bb[1] + 6
+        pad = 30
+        card_h = int(pad * 2 + lh + 16 + th + 20)
+        card_w = VIDEO_WIDTH - 40
+        card = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(card)
+        d.rounded_rectangle([(0, 0), (card_w - 1, card_h - 1)], radius=16,
+                            fill=(0, 0, 0, 210))
+        d.rounded_rectangle([(2, 2), (card_w - 3, card_h - 3)], radius=14,
+                            outline=season_colors["primary"] + (150,), width=2)
+        y = pad
+        # Label
+        lw = lb[2] - lb[0]
+        d.text(((card_w - lw) // 2, y), label, font=font_label, fill=season_colors["primary"] + (200,))
+        y += lh + 16
+        # Topic lines
+        for line in lines:
+            bb = d.textbbox((0, 0), line, font=font_topic)
+            lw = bb[2] - bb[0]
+            x = (card_w - lw) // 2
+            d.text((x + 1, y + 1), line, font=font_topic, fill=(0, 0, 0, 80))
+            d.text((x, y), line, font=font_topic, fill=(255, 255, 255, 230))
+            y += bb[3] - bb[1] + 6
+        import numpy as np
+        dur = min(4.0, total_dur * 0.12)
+        start = max(0, total_dur - dur - 1.0)
+        clip = ImageClip(np.array(card)).with_duration(dur).with_start(start).with_position("center")
+        return clip
+    except Exception as e:
+        log(f"next card skip: {e}")
+        return None
+
 # progress bar
 
 def _make_progress_bar(total_dur, color):
@@ -574,6 +633,14 @@ def create_video(script_data, footage_clips):
         if lesson_card is not None:
             overlays.append(lesson_card)
             log(f"tips card added")
+
+    # Next episode card
+    next_topic = script_data.get("next_episode_topic", "")
+    if next_topic:
+        next_card = _make_next_card(total, next_topic, season_colors)
+        if next_card is not None:
+            overlays.append(next_card)
+            log(f"next card added: {next_topic[:40]}")
 
     log(f"total overlay clips: {len(overlays)}")
 

@@ -289,6 +289,13 @@ def generate_script(language: str = "ar") -> dict:
         if not tip2_text:
             tip2_text = "الصبر مفتاح الفرج."
 
+    # Get next episode topic for preview card
+    next_ep_topic = ""
+    if not is_finale:
+        n_sid, n_eid, n_topic, n_done = _get_next_episode(history)
+        if not n_done and n_topic:
+            next_ep_topic = n_topic
+
     data.update({
         "topic": topic,
         "ctr_title": ctr_title or topic,
@@ -296,6 +303,7 @@ def generate_script(language: str = "ar") -> dict:
         "hook_text": hook_text,
         "tip1_text": tip1_text,
         "tip2_text": tip2_text,
+        "next_episode_topic": next_ep_topic,
         "keywords": keywords[:10],
         "cine_keywords": cine_keywords[:6],
     })
