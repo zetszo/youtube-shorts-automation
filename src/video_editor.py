@@ -304,6 +304,31 @@ def _make_dark(total_dur):
             .with_duration(total_dur)
             .with_opacity(0.20))
 
+# channel watermark
+
+CHANNEL_NAME = "\u0625\u0631\u062b \u0627\u0644\u0625\u064a\u0645\u0627\u0646"
+
+def _make_watermark(total_dur):
+    try:
+        font = _get_font(32)
+        from PIL import Image, ImageDraw
+        dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bb = dummy.textbbox((0, 0), CHANNEL_NAME, font=font)
+        tw, th = bb[2] - bb[0], bb[3] - bb[1]
+        pad = 16
+        img = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle([(0, 0), (img.width, img.height)], radius=8, fill=(0, 0, 0, 100))
+        tx = (img.width - tw) // 2
+        ty = (img.height - th) // 2 - 2
+        d.text((tx + 1, ty + 1), CHANNEL_NAME, font=font, fill=(255, 255, 255, 60))
+        d.text((tx, ty), CHANNEL_NAME, font=font, fill=(255, 255, 255, 160))
+        import numpy as np
+        clip = ImageClip(np.array(img)).with_duration(total_dur).with_position((16, 16)).with_opacity(0.7)
+        return clip
+    except Exception:
+        return None
+
 # main
 
 def create_video(script_data, footage_clips):
@@ -358,6 +383,9 @@ def create_video(script_data, footage_clips):
     log(f"timestamps: {len(timestamps)}")
 
     overlays = [_make_dark(total)]
+    wm = _make_watermark(total)
+    if wm is not None:
+        overlays.append(wm)
     if timestamps:
         segs = group_segments(timestamps)
         log(f"segments: {len(segs)}")

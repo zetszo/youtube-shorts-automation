@@ -52,7 +52,7 @@ def _groq_complete(prompt: str, retries: int = 5) -> str:
             json={
                 "model": GROQ_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
+                "temperature": 0.5,
                 "max_tokens": 2048,
             },
             timeout=60,
