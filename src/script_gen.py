@@ -181,8 +181,6 @@ def generate_script(language: str = "ar") -> dict:
             f"العدد: {word_target}\n\n"
             "اكتب بالصيغة التالية بالضبط:\n\n"
             "##TITLE## (عنوان جذاب للقصة)\n"
-            "##AYAH## (آية قرآنية مرتبطة بالقصة مع ذكر اسم السورة)\n"
-            "(جملة افتتاحية قوية تشد المشاهد)\n"
             "(القصة كاملة بأسلوب مشوق)\n"
             "##LESSON## (عبرة مستفادة من القصة)\n"
             "##QUESTION## (سؤال تفاعلي للمشاهد)\n"
@@ -203,7 +201,6 @@ def generate_script(language: str = "ar") -> dict:
         story_raw = ""
 
     ctr_title = ""
-    ayah_text = ""
     lesson_text = ""
     question_text = ""
     keywords = []
@@ -216,11 +213,6 @@ def generate_script(language: str = "ar") -> dict:
     m = re.search(r'##TITLE##\s*(.*?)(?:\n|$)', text)
     if m:
         ctr_title = m.group(1).strip()[:90]
-        text = text.replace(m.group(0), '', 1)
-
-    m = re.search(r'##AYAH##\s*(.*?)(?:\n|$)', text)
-    if m:
-        ayah_text = m.group(1).strip()
         text = text.replace(m.group(0), '', 1)
 
     m = re.search(r'##LESSON##\s*(.*?)(?:\n|$)', text)
@@ -272,8 +264,6 @@ def generate_script(language: str = "ar") -> dict:
             "اللهم صل على سيدنا محمد. "
             "ما رأيك في هذه القصة؟ شاركنا في التعليقات."
         )
-        if not ayah_text:
-            ayah_text = "\"وقُل رَّبِّ زِدْنِي عِلْمًا\" (طه: 114)"
         if not lesson_text:
             lesson_text = "العبرة: الصبر مفتاح الفرج، والثقة بالله تملأ القلب يقيناً."
         if not question_text:
@@ -283,7 +273,6 @@ def generate_script(language: str = "ar") -> dict:
         "topic": topic,
         "ctr_title": ctr_title or topic,
         "story": story,
-        "ayah_text": ayah_text,
         "lesson_text": lesson_text,
         "question_text": question_text,
         "keywords": keywords[:10],
@@ -307,7 +296,7 @@ def _clean_text(text: str) -> str:
         "**", "*",
         "المطلوب", "تعليمات", "الهدف", "تعليمات صارمة",
         "أنت خبير", "بعد القصة", "اكتب القصة", "##",
-        "##TITLE##", "##AYAH##", "##LESSON##", "##QUESTION##", "##KEYWORDS##",
+        "##TITLE##", "##LESSON##", "##QUESTION##", "##KEYWORDS##",
         "إليك", "هذه هي القصة", "القصة:", "القصة المطلوبة",
         "بالطبع", "بالتأكيد", "سأكتب", "إليك النص",
         "الافتتاحية", "الخاتمة", "نص الراوي",

@@ -348,73 +348,6 @@ def _get_season_colors(script_data):
     sid = script_data.get("season_id", 1)
     return SEASON_COLORS.get(sid, SEASON_COLORS[1])
 
-# ayah card
-
-def _make_ayah_card(total_dur, ayah_text, season_colors):
-    if not ayah_text:
-        return None
-    try:
-        font_ayah = _get_font(56)
-        font_surah = _get_font(28)
-        dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        lines = ayah_text.split(" (")
-        ayah_line = lines[0].strip().strip('"').strip("'")
-        surah_line = ""
-        if len(lines) > 1:
-            surah_line = "(" + lines[1]
-        wrapped = []
-        for w in ayah_line.split():
-            if not wrapped:
-                wrapped.append(w)
-            else:
-                test = wrapped[-1] + " " + w
-                bb = dummy.textbbox((0, 0), test, font=font_ayah)
-                if bb[2] - bb[0] < VIDEO_WIDTH * 0.85:
-                    wrapped[-1] = test
-                else:
-                    wrapped.append(w)
-        ayah_display = "\n".join(wrapped)
-        bb = dummy.textbbox((0, 0), ayah_display, font=font_ayah)
-        aw = bb[2] - bb[0]
-        ah = bb[3] - bb[1]
-        lines_count = len(wrapped)
-        surah_h = 0
-        if surah_line:
-            sb = dummy.textbbox((0, 0), surah_line, font=font_surah)
-            surah_h = sb[3] - sb[1]
-        pad_x = 60
-        pad_y = 50
-        card_w = min(int(aw + pad_x * 2), VIDEO_WIDTH - 40)
-        card_h = int(ah + surah_h + pad_y * 2 + 20)
-        card = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
-        d = ImageDraw.Draw(card)
-        d.rounded_rectangle([(0, 0), (card_w - 1, card_h - 1)], radius=24,
-                            fill=(season_colors["bg"][0], season_colors["bg"][1], season_colors["bg"][2], 220))
-        # Gold border
-        d.rounded_rectangle([(3, 3), (card_w - 4, card_h - 4)], radius=22,
-                            outline=season_colors["primary"] + (180,), width=3)
-        y = pad_y
-        for line in wrapped:
-            lb = d.textbbox((0, 0), line, font=font_ayah)
-            lw = lb[2] - lb[0]
-            x = (card_w - lw) // 2
-            d.text((x + 2, y + 2), line, font=font_ayah, fill=(0, 0, 0, 80))
-            d.text((x, y), line, font=font_ayah, fill=season_colors["primary"] + (255,))
-            y += lb[3] - lb[1] + 8
-        if surah_line:
-            y += 10
-            sb = d.textbbox((0, 0), surah_line, font=font_surah)
-            sw = sb[2] - sb[0]
-            sx = (card_w - sw) // 2
-            d.text((sx + 1, y + 1), surah_line, font=font_surah, fill=(0, 0, 0, 60))
-            d.text((sx, y), surah_line, font=font_surah, fill=(200, 200, 200, 200))
-        import numpy as np
-        clip = ImageClip(np.array(card)).with_duration(5.0).with_position("center").with_start(0)
-        return clip
-    except Exception as e:
-        log(f"ayah card skip: {e}")
-        return None
-
 # lesson card
 
 def _make_lesson_card(total_dur, lesson_text, question_text, season_colors):
@@ -566,16 +499,6 @@ def create_video(script_data, footage_clips):
     offset = intro_dur
     log(f"audio: {total:.1f}s | story: {len(story.split())} words | font={FONT_SIZE}px")
 
-    # Mix background music
-    try:
-        from background_music import get_background_audio
-        bg_music = get_background_audio(total, topic=script_data.get("topic", ""))
-        if bg_music is not None:
-            audio = CompositeAudioClip([audio, bg_music])
-            log(f"bg music mixed")
-    except Exception as e:
-        log(f"bg music skip: {e}")
-
     parts = []
     for c in footage_clips:
         try:
@@ -620,14 +543,6 @@ def create_video(script_data, footage_clips):
     wm = _make_watermark(total)
     if wm is not None:
         overlays.append(wm)
-
-    # Ayah intro card
-    ayah_text = script_data.get("ayah_text", "")
-    if ayah_text:
-        ayah_card = _make_ayah_card(total, ayah_text, season_colors)
-        if ayah_card is not None:
-            overlays.append(ayah_card)
-            log(f"ayah card added")
 
     # Progress bar
     try:
