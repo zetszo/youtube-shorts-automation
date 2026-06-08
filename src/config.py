@@ -13,7 +13,7 @@ VIDEO_HEIGHT = 1920
 VIDEO_DURATION = 50
 
 TTS_VOICE = "ar-EG-ShakirNeural"
-TTS_RATE = "+0%"
+TTS_RATE = "-5%"
 
 SEASONS = {
     1: {

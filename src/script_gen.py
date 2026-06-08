@@ -181,6 +181,7 @@ def generate_script(language: str = "ar") -> dict:
             f"العدد: {word_target}\n\n"
             "اكتب بالصيغة التالية بالضبط:\n\n"
             "##TITLE## (عنوان جذاب للقصة)\n"
+            "##HOOK## (جملة استفهامية تثير الفضول: هل تعلم، هل تصدق، هل تتوقع)\n"
             "(القصة كاملة بأسلوب مشوق)\n"
             "##LESSON## (عبرة مستفادة من القصة)\n"
             "##QUESTION## (سؤال تفاعلي للمشاهد)\n"
@@ -201,6 +202,7 @@ def generate_script(language: str = "ar") -> dict:
         story_raw = ""
 
     ctr_title = ""
+    hook_text = ""
     lesson_text = ""
     question_text = ""
     keywords = []
@@ -213,6 +215,11 @@ def generate_script(language: str = "ar") -> dict:
     m = re.search(r'##TITLE##\s*(.*?)(?:\n|$)', text)
     if m:
         ctr_title = m.group(1).strip()[:90]
+        text = text.replace(m.group(0), '', 1)
+
+    m = re.search(r'##HOOK##\s*(.*?)(?:\n|$)', text)
+    if m:
+        hook_text = m.group(1).strip()
         text = text.replace(m.group(0), '', 1)
 
     m = re.search(r'##LESSON##\s*(.*?)(?:\n|$)', text)
@@ -257,13 +264,16 @@ def generate_script(language: str = "ar") -> dict:
             "سبحان الله! ",
             "هل تعلم أن ",
         ]
+        hook_choice = random.choice(hooks) + topic + "؟"
         story = (
-            random.choice(hooks) + topic + "؟ "
+            hook_choice + " "
             "هذه القصة تحمل عبرة عظيمة. "
             "كان هذا في تاريخ الإسلام. "
             "اللهم صل على سيدنا محمد. "
             "ما رأيك في هذه القصة؟ شاركنا في التعليقات."
         )
+        if not hook_text:
+            hook_text = hook_choice
         if not lesson_text:
             lesson_text = "العبرة: الصبر مفتاح الفرج، والثقة بالله تملأ القلب يقيناً."
         if not question_text:
@@ -273,6 +283,7 @@ def generate_script(language: str = "ar") -> dict:
         "topic": topic,
         "ctr_title": ctr_title or topic,
         "story": story,
+        "hook_text": hook_text,
         "lesson_text": lesson_text,
         "question_text": question_text,
         "keywords": keywords[:10],
@@ -296,7 +307,7 @@ def _clean_text(text: str) -> str:
         "**", "*",
         "المطلوب", "تعليمات", "الهدف", "تعليمات صارمة",
         "أنت خبير", "بعد القصة", "اكتب القصة", "##",
-        "##TITLE##", "##LESSON##", "##QUESTION##", "##KEYWORDS##",
+        "##TITLE##", "##HOOK##", "##LESSON##", "##QUESTION##", "##KEYWORDS##",
         "إليك", "هذه هي القصة", "القصة:", "القصة المطلوبة",
         "بالطبع", "بالتأكيد", "سأكتب", "إليك النص",
         "الافتتاحية", "الخاتمة", "نص الراوي",
