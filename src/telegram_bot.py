@@ -6,7 +6,8 @@ import traceback
 from datetime import datetime
 from io import BytesIO
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -20,7 +21,12 @@ import thumbnail
 import uploader
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-ALLOWED_USERS = [int(x) for x in os.environ.get("TELEGRAM_USER_ID", "0").split(",") if x.strip()]
+ALLOWED_USERS = []
+raw_ids = os.environ.get("TELEGRAM_USER_ID", "")
+for x in raw_ids.split(","):
+    x = x.strip()
+    if x.isdigit():
+        ALLOWED_USERS.append(int(x))
 
 HISTORY_FILE = "output/history.json"
 
