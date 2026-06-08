@@ -84,11 +84,42 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def generate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_auth(update, context):
         return
-    msg = await update.message.reply_text("\u23f3 \u062c\u0627\u0631 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u062d\u0644\u0642\u0629 \u0627\u0644\u062a\u0627\u0644\u064a\u0629...")
+    msg = await update.message.reply_text("\u23f3 \u062c\u0627\u0631 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u0633\u0643\u0631\u064a\u0628\u062a...")
+    loop = asyncio.get_running_loop()
 
-    def _run():
+    # Step 1: Generate script only
+    def _gen_script():
         try:
-            sd = script_gen.generate_script()
+            return script_gen.generate_script()
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    sd = await loop.run_in_executor(None, _gen_script)
+    if "error" in sd:
+        await msg.edit_text(f"\u274c \u0641\u0634\u0644 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u0633\u0643\u0631\u064a\u0628\u062a: {sd['error']}")
+        return
+
+    # Send script text to Telegram immediately
+    story = sd.get("story", "").strip()
+    title_line = sd.get("ctr_title") or sd.get("topic", "")
+    kw = sd.get("keywords", [])
+    script_text = f"*{title_line}*\n\n{story}"
+    if kw:
+        script_text += f"\n\n#{' #'.join(kw[:5])}"
+    try:
+        await msg.edit_text("\u2705 \u0627\u0644\u0633\u0643\u0631\u064a\u0628\u062a \u062c\u0627\u0647\u0632!")
+        await msg.reply_text(script_text, parse_mode="Markdown")
+    except Exception:
+        try:
+            await msg.reply_text(script_text)
+        except Exception:
+            pass
+
+    # Step 2: Generate voiceover, footage, video, thumbnail
+    status_msg = await msg.reply_text("\U0001f3ac \u062c\u0627\u0631 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u0641\u064a\u062f\u064a\u0648...")
+
+    def _gen_video(sd):
+        try:
             voiceover.generate_voiceover(sd)
             clips = footage.download_footage(sd)
             video_editor.create_video(sd, clips)
@@ -105,11 +136,9 @@ async def generate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, _run)
-
+    result = await loop.run_in_executor(None, _gen_video, sd)
     if "error" in result:
-        await msg.edit_text(f"\u274c \u0641\u0634\u0644: {result['error']}")
+        await status_msg.edit_text(f"\u274c \u0641\u0634\u0644 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u0641\u064a\u062f\u064a\u0648: {result['error']}")
         return
 
     ep = result.get("episode_id", result.get("topic_id", ""))
@@ -126,7 +155,7 @@ async def generate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\U0001f4f0 \u0627\u0644\u062d\u0644\u0642\u0629 " + str(ep_num) + "/" + str(ep_total) + "\n"
         "\U0001f3ac " + str(story_len) + " \u0643\u0644\u0645\u0629"
     )
-    await msg.edit_text(txt)
+    await status_msg.edit_text(txt)
 
     if video_path and os.path.exists(video_path):
         await msg.reply_text("\U0001f3ac \u062c\u0627\u0631 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0641\u064a\u062f\u064a\u0648...")

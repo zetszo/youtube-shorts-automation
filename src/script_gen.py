@@ -175,15 +175,19 @@ def generate_script(language: str = "ar") -> dict:
             intro_line = "- في النهاية أضف خاتمة الموسم: '" + season_config["finale"] + "'\n"
 
         story_prompt = (
-            "اكتب قصة دينية قصيرة عن هذا الموضوع فقط:\n"
+            "اكتب قصة دينية عن هذا الموضوع:\n"
             f"{topic}\n"
             f"الحلقة {eps_in_season} من {eps_total} - {season_name}\n\n"
             f"العدد: {word_target}\n\n"
-            "الصيغة:\n"
-            "##TITLE## (عنوان مختصر عن القصة)\n"
-            "القصة\n"
+            "اكتب بالصيغة التالية بالضبط:\n\n"
+            "##TITLE## (عنوان جذاب للقصة)\n"
+            "##AYAH## (آية قرآنية مرتبطة بالقصة مع ذكر اسم السورة)\n"
+            "(جملة افتتاحية قوية تشد المشاهد)\n"
+            "(القصة كاملة بأسلوب مشوق)\n"
+            "##LESSON## (عبرة مستفادة من القصة)\n"
+            "##QUESTION## (سؤال تفاعلي للمشاهد)\n"
             "##KEYWORDS## كلمة1, كلمة2, كلمة3, كلمة4, كلمة5, كلمة6, كلمة7, كلمة8\n\n"
-            "اكتب القصة فقط."
+            "اكتب المحتوى فقط."
         )
         data = {
             "season_id": sid,
@@ -198,30 +202,44 @@ def generate_script(language: str = "ar") -> dict:
     except Exception:
         story_raw = ""
 
-    story = story_raw
     ctr_title = ""
+    ayah_text = ""
+    lesson_text = ""
+    question_text = ""
     keywords = []
     cine_keywords = []
 
-    # Extract ##TITLE## (first line, before story)
-    if "##TITLE##" in story_raw:
-        after_title = story_raw.split("##TITLE##", 1)[1].strip()
-        if "\n" in after_title:
-            ctr_title = after_title.split("\n", 1)[0].strip()
-            story = after_title.split("\n", 1)[1].strip()
-        else:
-            ctr_title = after_title
-            story = ""
-    # Truncate title to 90 chars for YouTube
-    if ctr_title:
-        ctr_title = ctr_title[:90]
+    text = story_raw
 
-    # Extract ##KEYWORDS## from remaining story
-    if "##KEYWORDS##" in story:
-        parts = story.split("##KEYWORDS##")
-        story = parts[0].strip()
-        kw_text = parts[1].strip()
+    # Remove tagged lines via regex, keep everything else as story
+
+    m = re.search(r'##TITLE##\s*(.*?)(?:\n|$)', text)
+    if m:
+        ctr_title = m.group(1).strip()[:90]
+        text = text.replace(m.group(0), '', 1)
+
+    m = re.search(r'##AYAH##\s*(.*?)(?:\n|$)', text)
+    if m:
+        ayah_text = m.group(1).strip()
+        text = text.replace(m.group(0), '', 1)
+
+    m = re.search(r'##LESSON##\s*(.*?)(?:\n|$)', text)
+    if m:
+        lesson_text = m.group(1).strip()
+        text = text.replace(m.group(0), '', 1)
+
+    m = re.search(r'##QUESTION##\s*(.*?)(?:\n|$)', text)
+    if m:
+        question_text = m.group(1).strip()
+        text = text.replace(m.group(0), '', 1)
+
+    m = re.search(r'##KEYWORDS##\s*(.*?)(?:\n|$)', text)
+    if m:
+        kw_text = m.group(1).strip()
+        text = text.replace(m.group(0), '', 1)
         keywords = [k.strip() for k in kw_text.replace("\n", ",").split(",") if k.strip() and len(k.strip()) > 2]
+
+    story = text.strip()
 
     if not keywords:
         keywords = random.sample(FALLBACK_KEYWORDS, min(8, len(FALLBACK_KEYWORDS)))
@@ -252,13 +270,22 @@ def generate_script(language: str = "ar") -> dict:
             "هذه القصة تحمل عبرة عظيمة. "
             "كان هذا في تاريخ الإسلام. "
             "اللهم صل على سيدنا محمد. "
-            "هل كنت تعرف هذه القصة من قبل؟ أخبرنا في التعليقات."
+            "ما رأيك في هذه القصة؟ شاركنا في التعليقات."
         )
+        if not ayah_text:
+            ayah_text = "\"وقُل رَّبِّ زِدْنِي عِلْمًا\" (طه: 114)"
+        if not lesson_text:
+            lesson_text = "العبرة: الصبر مفتاح الفرج، والثقة بالله تملأ القلب يقيناً."
+        if not question_text:
+            question_text = "ما رأيك في هذه القصة؟ شاركنا في التعليقات."
 
     data.update({
         "topic": topic,
         "ctr_title": ctr_title or topic,
         "story": story,
+        "ayah_text": ayah_text,
+        "lesson_text": lesson_text,
+        "question_text": question_text,
         "keywords": keywords[:10],
         "cine_keywords": cine_keywords[:6],
     })
@@ -280,6 +307,7 @@ def _clean_text(text: str) -> str:
         "**", "*",
         "المطلوب", "تعليمات", "الهدف", "تعليمات صارمة",
         "أنت خبير", "بعد القصة", "اكتب القصة", "##",
+        "##TITLE##", "##AYAH##", "##LESSON##", "##QUESTION##", "##KEYWORDS##",
         "إليك", "هذه هي القصة", "القصة:", "القصة المطلوبة",
         "بالطبع", "بالتأكيد", "سأكتب", "إليك النص",
         "الافتتاحية", "الخاتمة", "نص الراوي",

@@ -96,7 +96,7 @@ def upload_video(script_data: dict) -> str:
 
     topic = script_data.get("topic", "\u0642\u0635\u0629 \u0625\u0633\u0644\u0627\u0645\u064a\u0629")
     ctr_title = script_data.get("ctr_title", "")
-    title = ctr_title if ctr_title and len(ctr_title) <= 90 else (topic if len(topic) <= 90 else topic[:87] + "...")
+    title = f"{topic} | {ctr_title}" if ctr_title and len(topic) + len(ctr_title) + 3 <= 95 else (ctr_title if ctr_title and len(ctr_title) <= 90 else (topic if len(topic) <= 90 else topic[:87] + "..."))
 
     desc_parts = [
         title,
