@@ -350,51 +350,49 @@ def _get_season_colors(script_data):
 
 # lesson card
 
-def _make_lesson_card(total_dur, lesson_text, question_text, season_colors):
-    if not lesson_text and not question_text:
+def _make_lesson_card(total_dur, tip1_text, tip2_text, season_colors):
+    if not tip1_text and not tip2_text:
         return None
     try:
-        font_lesson = _get_font(44)
-        font_question = _get_font(36)
+        font_tip1 = _get_font(44)
+        font_tip2 = _get_font(36)
         font_label = _get_font(26)
         dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        lines_lesson = []
-        if lesson_text:
-            for w in lesson_text.split():
-                if not lines_lesson:
-                    lines_lesson.append(w)
+        lines_tip1 = []
+        if tip1_text:
+            for w in tip1_text.split():
+                if not lines_tip1:
+                    lines_tip1.append(w)
                 else:
-                    test = lines_lesson[-1] + " " + w
-                    bb = dummy.textbbox((0, 0), test, font=font_lesson)
+                    test = lines_tip1[-1] + " " + w
+                    bb = dummy.textbbox((0, 0), test, font=font_tip1)
                     if bb[2] - bb[0] < VIDEO_WIDTH * 0.80:
-                        lines_lesson[-1] = test
+                        lines_tip1[-1] = test
                     else:
-                        lines_lesson.append(w)
-        lines_question = []
-        if question_text:
-            for w in question_text.split():
-                if not lines_question:
-                    lines_question.append(w)
+                        lines_tip1.append(w)
+        lines_tip2 = []
+        if tip2_text:
+            for w in tip2_text.split():
+                if not lines_tip2:
+                    lines_tip2.append(w)
                 else:
-                    test = lines_question[-1] + " " + w
-                    bb = dummy.textbbox((0, 0), test, font=font_question)
+                    test = lines_tip2[-1] + " " + w
+                    bb = dummy.textbbox((0, 0), test, font=font_tip2)
                     if bb[2] - bb[0] < VIDEO_WIDTH * 0.80:
-                        lines_question[-1] = test
+                        lines_tip2[-1] = test
                     else:
-                        lines_question.append(w)
-        # Measure heights
-        lh = 0
-        for line in lines_lesson:
-            bb = dummy.textbbox((0, 0), line, font=font_lesson)
-            lh += bb[3] - bb[1] + 6
-        qh = 0
-        for line in lines_question:
-            bb = dummy.textbbox((0, 0), line, font=font_question)
-            qh += bb[3] - bb[1] + 6
+                        lines_tip2.append(w)
+        h1 = 0
+        for line in lines_tip1:
+            bb = dummy.textbbox((0, 0), line, font=font_tip1)
+            h1 += bb[3] - bb[1] + 6
+        h2 = 0
+        for line in lines_tip2:
+            bb = dummy.textbbox((0, 0), line, font=font_tip2)
+            h2 += bb[3] - bb[1] + 6
         label_h = 30
-        pad_x = 50
         pad_y = 40
-        total_h = int(pad_y * 2 + label_h + lh + qh + 30)
+        total_h = int(pad_y * 2 + label_h + h1 + h2 + 30)
         card_w = VIDEO_WIDTH - 60
         card = Image.new("RGBA", (card_w, total_h), (0, 0, 0, 0))
         d = ImageDraw.Draw(card)
@@ -403,33 +401,32 @@ def _make_lesson_card(total_dur, lesson_text, question_text, season_colors):
         d.rounded_rectangle([(2, 2), (card_w - 3, total_h - 3)], radius=18,
                             outline=season_colors["primary"] + (150,), width=2)
         y = pad_y
-        # "عبرة" label
-        if lines_lesson:
-            lbl = "عبرة من القصة"
+        if lines_tip1:
+            lbl = "\u0646\u0635\u064a\u062d\u0629 1"
             lb = d.textbbox((0, 0), lbl, font=font_label)
             lw = lb[2] - lb[0]
             d.text(((card_w - lw) // 2, y), lbl, font=font_label, fill=season_colors["primary"] + (200,))
             y += label_h
-            for line in lines_lesson:
-                lb = d.textbbox((0, 0), line, font=font_lesson)
+            for line in lines_tip1:
+                lb = d.textbbox((0, 0), line, font=font_tip1)
                 lw = lb[2] - lb[0]
                 x = (card_w - lw) // 2
-                d.text((x + 1, y + 1), line, font=font_lesson, fill=(0, 0, 0, 80))
-                d.text((x, y), line, font=font_lesson, fill=(255, 255, 255, 230))
+                d.text((x + 1, y + 1), line, font=font_tip1, fill=(0, 0, 0, 80))
+                d.text((x, y), line, font=font_tip1, fill=(255, 255, 255, 230))
                 y += lb[3] - lb[1] + 6
         y += 10
-        if lines_question:
-            lbl = "تفاعل"
+        if lines_tip2:
+            lbl = "\u0646\u0635\u064a\u062d\u0629 2"
             lb = d.textbbox((0, 0), lbl, font=font_label)
             lw = lb[2] - lb[0]
             d.text(((card_w - lw) // 2, y), lbl, font=font_label, fill=season_colors["secondary"] + (200,))
             y += label_h
-            for line in lines_question:
-                lb = d.textbbox((0, 0), line, font=font_question)
+            for line in lines_tip2:
+                lb = d.textbbox((0, 0), line, font=font_tip2)
                 lw = lb[2] - lb[0]
                 x = (card_w - lw) // 2
-                d.text((x + 1, y + 1), line, font=font_question, fill=(0, 0, 0, 80))
-                d.text((x, y), line, font=font_question, fill=season_colors["secondary"] + (255,))
+                d.text((x + 1, y + 1), line, font=font_tip2, fill=(0, 0, 0, 80))
+                d.text((x, y), line, font=font_tip2, fill=season_colors["secondary"] + (255,))
                 y += lb[3] - lb[1] + 6
         import numpy as np
         dur = min(6.0, total_dur * 0.25)
@@ -569,14 +566,14 @@ def create_video(script_data, footage_clips):
     else:
         log("NO TIMESTAMPS — no subtitles")
 
-    # Lesson/question card at end
-    lesson_text = script_data.get("lesson_text", "")
-    question_text = script_data.get("question_text", "")
-    if lesson_text or question_text:
-        lesson_card = _make_lesson_card(total, lesson_text, question_text, season_colors)
+    # Tips card at end
+    tip1_text = script_data.get("tip1_text", "")
+    tip2_text = script_data.get("tip2_text", "")
+    if tip1_text or tip2_text:
+        lesson_card = _make_lesson_card(total, tip1_text, tip2_text, season_colors)
         if lesson_card is not None:
             overlays.append(lesson_card)
-            log(f"lesson card added")
+            log(f"tips card added")
 
     log(f"total overlay clips: {len(overlays)}")
 

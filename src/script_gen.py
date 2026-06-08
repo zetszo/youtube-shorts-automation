@@ -166,7 +166,7 @@ def generate_script(language: str = "ar") -> dict:
         is_last = eps_in_season == eps_total
         season_name = season_config["name"]
 
-        word_target = "500 كلمة"
+        word_target = "300 كلمة"
 
         intro_line = ""
         if is_first:
@@ -183,8 +183,8 @@ def generate_script(language: str = "ar") -> dict:
             "##TITLE## (عنوان جذاب للقصة)\n"
             "##HOOK## (جملة استفهامية تثير الفضول: هل تعلم، هل تصدق، هل تتوقع)\n"
             "(القصة كاملة بأسلوب مشوق)\n"
-            "##LESSON## (عبرة مستفادة من القصة)\n"
-            "##QUESTION## (سؤال تفاعلي للمشاهد)\n"
+            "##TIP1## (نصيحة أولى مستفادة من القصة)\n"
+            "##TIP2## (نصيحة ثانية مختلفة عن الأولى)\n"
             "##KEYWORDS## كلمة1, كلمة2, كلمة3, كلمة4, كلمة5, كلمة6, كلمة7, كلمة8\n\n"
             "اكتب المحتوى فقط."
         )
@@ -203,14 +203,12 @@ def generate_script(language: str = "ar") -> dict:
 
     ctr_title = ""
     hook_text = ""
-    lesson_text = ""
-    question_text = ""
+    tip1_text = ""
+    tip2_text = ""
     keywords = []
     cine_keywords = []
 
     text = story_raw
-
-    # Remove tagged lines via regex, keep everything else as story
 
     m = re.search(r'##TITLE##\s*(.*?)(?:\n|$)', text)
     if m:
@@ -222,14 +220,14 @@ def generate_script(language: str = "ar") -> dict:
         hook_text = m.group(1).strip()
         text = text.replace(m.group(0), '', 1)
 
-    m = re.search(r'##LESSON##\s*(.*?)(?:\n|$)', text)
+    m = re.search(r'##TIP1##\s*(.*?)(?:\n|$)', text)
     if m:
-        lesson_text = m.group(1).strip()
+        tip1_text = m.group(1).strip()
         text = text.replace(m.group(0), '', 1)
 
-    m = re.search(r'##QUESTION##\s*(.*?)(?:\n|$)', text)
+    m = re.search(r'##TIP2##\s*(.*?)(?:\n|$)', text)
     if m:
-        question_text = m.group(1).strip()
+        tip2_text = m.group(1).strip()
         text = text.replace(m.group(0), '', 1)
 
     m = re.search(r'##KEYWORDS##\s*(.*?)(?:\n|$)', text)
@@ -274,18 +272,18 @@ def generate_script(language: str = "ar") -> dict:
         )
         if not hook_text:
             hook_text = hook_choice
-        if not lesson_text:
-            lesson_text = "العبرة: الصبر مفتاح الفرج، والثقة بالله تملأ القلب يقيناً."
-        if not question_text:
-            question_text = "ما رأيك في هذه القصة؟ شاركنا في التعليقات."
+        if not tip1_text:
+            tip1_text = "توكل على الله في كل أمورك."
+        if not tip2_text:
+            tip2_text = "الصبر مفتاح الفرج."
 
     data.update({
         "topic": topic,
         "ctr_title": ctr_title or topic,
         "story": story,
         "hook_text": hook_text,
-        "lesson_text": lesson_text,
-        "question_text": question_text,
+        "tip1_text": tip1_text,
+        "tip2_text": tip2_text,
         "keywords": keywords[:10],
         "cine_keywords": cine_keywords[:6],
     })
@@ -307,7 +305,7 @@ def _clean_text(text: str) -> str:
         "**", "*",
         "المطلوب", "تعليمات", "الهدف", "تعليمات صارمة",
         "أنت خبير", "بعد القصة", "اكتب القصة", "##",
-        "##TITLE##", "##HOOK##", "##LESSON##", "##QUESTION##", "##KEYWORDS##",
+        "##TITLE##", "##HOOK##", "##TIP1##", "##TIP2##", "##KEYWORDS##",
         "إليك", "هذه هي القصة", "القصة:", "القصة المطلوبة",
         "بالطبع", "بالتأكيد", "سأكتب", "إليك النص",
         "الافتتاحية", "الخاتمة", "نص الراوي",

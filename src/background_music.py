@@ -6,11 +6,9 @@ import numpy as np
 MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "output", "music")
 _TRACK_CACHE = None
 
-# Mood keywords in filenames (lowercase)
 _SAD_WORDS = ["sad", "emotional", "heart", "tear", "cry", "dark", "so sad"]
 _CALM_WORDS = ["calm", "peace", "cool", "love", "traditional", "happy"]
 
-# Arabic story keywords that suggest mood
 _SAD_STORY_WORDS = [
     "وفاة", "مات", "بكى", "يبكي", "بكاء", "استشهاد", "شهيد", "شهداء",
     "حزن", "حزين", "دمعة", "دموع", "ألم", "أوجع", "وجع", "مرض",
@@ -25,7 +23,6 @@ _FALLBACK_SONGS = [
 ]
 
 def _classify_track(fname):
-    """Classify a track as 'sad', 'calm', or 'default' based on filename."""
     low = fname.lower()
     for w in _SAD_WORDS:
         if w in low:
@@ -36,9 +33,9 @@ def _classify_track(fname):
     return "default"
 
 def scan_tracks():
-    """Return dict: mood -> list of file paths."""
     tracks = {"sad": [], "calm": [], "default": []}
     if not os.path.isdir(MUSIC_DIR):
+        print(f"  [MUSIC] dir not found: {MUSIC_DIR}")
         return tracks
     for f in os.listdir(MUSIC_DIR):
         if f.endswith((".mp3", ".m4a", ".wav", ".ogg")):
@@ -48,16 +45,18 @@ def scan_tracks():
     return tracks
 
 def pick_track(topic=""):
-    """Pick the best track for the given story topic."""
     global _TRACK_CACHE
     if _TRACK_CACHE is None:
         _TRACK_CACHE = scan_tracks()
+        for mood in _TRACK_CACHE:
+            if _TRACK_CACHE[mood]:
+                print(f"  [MUSIC] {mood}: {len(_TRACK_CACHE[mood])} tracks")
 
     all_tracks = _TRACK_CACHE["sad"] + _TRACK_CACHE["calm"] + _TRACK_CACHE["default"]
     if not all_tracks:
+        print("  [MUSIC] no tracks found")
         return None
 
-    # Determine if story is sad
     is_sad = False
     if topic:
         for w in _SAD_STORY_WORDS:
@@ -75,21 +74,19 @@ def pick_track(topic=""):
     return chosen
 
 def get_background_audio(duration, topic=""):
-    """Return a low-volume background music AudioFileClip or None."""
     path = pick_track(topic)
     if path is None:
         return None
     try:
         from moviepy import AudioFileClip, concatenate_audioclips
-        from moviepy.audio.fx import AudioFadeIn, AudioFadeOut
         music = AudioFileClip(path)
-        if music.duration < duration:
-            n_loops = int(np.ceil(duration / music.duration))
-            music = concatenate_audioclips([music] * n_loops)
-        music = music.subclipped(0, duration)
-        music = music.with_volume_scaled(0.20)
-        fade = min(3.0, duration * 0.1)
-        music = music.with_effects([AudioFadeIn(fade), AudioFadeOut(fade)])
+        orig_dur = music.duration
+        print(f"  [MUSIC] {os.path.basename(path)[:60]} ({orig_dur:.1f}s)")
+        if orig_dur < duration:
+            n = int(np.ceil(duration / orig_dur))
+            music = concatenate_audioclips([music] * n)
+        music = music.subclipped(0, duration).with_volume_scaled(0.20)
         return music
-    except Exception:
+    except Exception as e:
+        print(f"  [MUSIC] error: {e}")
         return None
