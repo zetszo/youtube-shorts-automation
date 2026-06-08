@@ -10,7 +10,7 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import (
     VideoFileClip, AudioFileClip, CompositeVideoClip,
-    ImageClip, concatenate_videoclips, ColorClip
+    ImageClip, concatenate_videoclips, concatenate_audioclips, ColorClip
 )
 from moviepy.video.fx import Resize
 from config import VIDEO_WIDTH, VIDEO_HEIGHT
@@ -311,6 +311,17 @@ def create_video(script_data, footage_clips):
     audio = AudioFileClip(script_data["audio_file"])
     total = audio.duration
     log(f"audio: {audio.duration:.1f}s | story: {len(story.split())} words | font={FONT_SIZE}px")
+
+    # Mix background music
+    try:
+        from background_music import get_background_audio
+        bg_music = get_background_audio(total)
+        if bg_music is not None:
+            from moviepy import CompositeAudioClip
+            audio = CompositeAudioClip([audio, bg_music])
+            log(f"bg music mixed")
+    except Exception as e:
+        log(f"bg music skip: {e}")
 
     parts = []
     for c in footage_clips:
